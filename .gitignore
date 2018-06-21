@@ -1,0 +1,6 @@
+*.sw?
+obj
+
+res.txt
+
+*.dat
