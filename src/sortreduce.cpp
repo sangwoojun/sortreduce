@@ -4,16 +4,16 @@
 SortReduce::SortReduce(SortReduce::Config *config) {
 	this->config = config;
 	switch (config->val_type) {
-		case SortReduce::VAL_BINARY32: {
+		case SortReduceTypes::VAL_BINARY32: {
 			if ( config->update32 == NULL ) {
-				fprintf(stderr, "Update function for VAL_BINARY32 not supplied\n" );
+				fprintf(stderr, "ERROR: Update function for VAL_BINARY32 not supplied\n" );
 				return;
 			}
 			break;
 		}
-		case SortReduce::VAL_BINARY64: {
+		case SortReduceTypes::VAL_BINARY64: {
 			if ( config->update64 == NULL ) {
-				fprintf(stderr, "Update function for VAL_BINARY64 not supplied\n" );
+				fprintf(stderr, "ERROR: Update function for VAL_BINARY64 not supplied\n" );
 				return;
 			}
 			break;
@@ -44,7 +44,7 @@ SortReduce::ManagerThread() {
 }
 
 
-SortReduce::Config::Config(SortReduce::KeyType key_type, SortReduce::ValType val_type, int file_input, int file_output, std::string temporary_directory) {
+SortReduce::Config::Config(SortReduceTypes::KeyType key_type, SortReduceTypes::ValType val_type, int file_input, int file_output, std::string temporary_directory) {
 	this->key_type = key_type;
 	this->val_type = val_type;
 	this->file_input = file_input;
