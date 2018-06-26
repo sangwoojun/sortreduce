@@ -15,6 +15,7 @@
 #include <string>
 #include <thread>
 
+#include "blocksorter.h"
 #include "types.h"
 
 class SortReduce {
@@ -58,14 +59,15 @@ public:
 
 public:
 	SortReduce(SortReduce::Config* config);
-	void PutBlock(void* buffer, size_t bytes);
+	bool PutBlock(void* buffer, size_t bytes);
 	size_t GetBlock(void* buffer);
 	SortReduce::Status CheckStatus();
 private:
 	SortReduce::Config* config;
 
-	std::thread manager_thread;
+	BlockSorter* mp_block_sorter;
 
+	std::thread manager_thread;
 	void ManagerThread();
 };
 

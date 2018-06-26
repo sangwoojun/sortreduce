@@ -19,11 +19,14 @@ SortReduce::SortReduce(SortReduce::Config *config) {
 			break;
 		}
 	}
+	mp_block_sorter = new BlockSorter(config->key_type, config->val_type, 2); //FIXME
 	manager_thread = std::thread(&SortReduce::ManagerThread, this);
 }
 
-void 
+bool 
 SortReduce::PutBlock(void* buffer, size_t bytes) {
+	mp_block_sorter->PutBlock(buffer,bytes);
+	return false;
 }
 
 size_t
@@ -41,6 +44,10 @@ SortReduce::CheckStatus() {
 void
 SortReduce::ManagerThread() {
 	//printf( "maximum threads: %d\n", config->maximum_threads );
+
+	while (true) {
+		mp_block_sorter->CheckSpawnThreads();
+	}
 }
 
 
