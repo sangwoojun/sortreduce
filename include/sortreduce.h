@@ -17,6 +17,7 @@
 
 #include "blocksorter.h"
 #include "types.h"
+#include "utils.h"
 
 class SortReduce {
 public:
@@ -69,6 +70,8 @@ private:
 
 	std::thread manager_thread;
 	void ManagerThread();
+
+	SortReduceUtils::MutexedQueue<SortReduceTypes::File>* mq_temp_files;
 };
 
 #endif

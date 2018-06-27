@@ -1,6 +1,12 @@
 #include "sortreduce.h"
 
 
+/**
+TODO
+Files in mq_temp_files may have writes inflight...
+**/
+
+
 SortReduce::SortReduce(SortReduce::Config *config) {
 	this->config = config;
 	switch (config->val_type) {
@@ -19,7 +25,11 @@ SortReduce::SortReduce(SortReduce::Config *config) {
 			break;
 		}
 	}
-	mp_block_sorter = new BlockSorter(config->key_type, config->val_type, 2); //FIXME
+
+	mq_temp_files = new SortReduceUtils::MutexedQueue<SortReduceTypes::File>();
+
+	mp_block_sorter = new BlockSorter(config->key_type, config->val_type, mq_temp_files, config->temporary_directory, config->maximum_threads/2); //FIXME thread count
+
 	manager_thread = std::thread(&SortReduce::ManagerThread, this);
 }
 

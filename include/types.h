@@ -1,8 +1,7 @@
 #ifndef __TYPES_H__
 #define __TYPES_H__
 
-class SortReduceTypes {
-public:
+namespace SortReduceTypes {
 	typedef enum {
 		KEY_BINARY32,
 		KEY_BINARY64,
@@ -16,6 +15,11 @@ public:
 		void* buffer;
 		size_t bytes;
 	} Block;
-};
+
+	typedef struct {
+		int fd;
+		//size_t bytes;
+	} File;
+}
 
 #endif

@@ -22,7 +22,8 @@ int main(int argc, char** argv) {
 	}
 	sr->PutBlock(input_buffer, 1024*1024*32);
 
-	sleep(2);
+	sleep(5);
+	/*
 	uint32_t last_key = 0;
 	for ( uint32_t i = 0; i < 1024*1024*32/sizeof(uint32_t)/2; i++ ) {
 		uint32_t key = input_buffer[i*2];
@@ -32,4 +33,5 @@ int main(int argc, char** argv) {
 		}
 		last_key = key;
 	}
+	*/
 }

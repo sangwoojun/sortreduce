@@ -12,10 +12,11 @@
 
 #include "types.h"
 #include "utils.h"
+#include "tempfilemanager.h"
 
 class BlockSorterThread {
 public:
-	BlockSorterThread(SortReduceTypes::KeyType key_type, SortReduceTypes::ValType val_type, BufferQueueInOut* buffer_queue);
+	BlockSorterThread(SortReduceTypes::KeyType key_type, SortReduceTypes::ValType val_type,SortReduceUtils::MutexedQueue<SortReduceTypes::Block>* buffer_queue, TempFileManager* file_manager, SortReduceUtils::MutexedQueue<SortReduceTypes::File>* temp_files);
 	void Exit();
 
 	typedef struct __attribute__ ((__packed__)) {uint32_t key; uint32_t val;} tK32_V32;
@@ -37,27 +38,34 @@ private:
 	static bool CompareKV(tKV a, tKV b);
 
 
-	BufferQueueInOut* m_buffer_queue;
+	SortReduceUtils::MutexedQueue<SortReduceTypes::Block>* m_buffer_queue_in;
+
+	TempFileManager* mp_file_manager;
+	
+	SortReduceUtils::MutexedQueue<SortReduceTypes::File>* mq_temp_files;
 };
 
 class BlockSorter {
 public:
-	BlockSorter(SortReduceTypes::KeyType key_type, SortReduceTypes::ValType val_type, int max_threads);
+	BlockSorter(SortReduceTypes::KeyType key_type, SortReduceTypes::ValType val_type, SortReduceUtils::MutexedQueue<SortReduceTypes::File>* temp_files, std::string temp_path, int max_threads);
 	void PutBlock(void* buffer, size_t bytes);
-	size_t GetBlock(void* buffer);
+	//size_t GetBlock(void* buffer);
 	void CheckSpawnThreads();
 
 private:
 	size_t m_maximum_threads;
-	int m_in_queue_spawn_limit_blocks;
-	int m_out_queue_spawn_limit_blocks;
+	size_t m_in_queue_spawn_limit_blocks;
+	size_t m_out_queue_spawn_limit_blocks;
 	std::vector<BlockSorterThread*> mv_sorter_threads;
 	timespec m_last_thread_check_time;
 
 	SortReduceTypes::KeyType m_key_type;
 	SortReduceTypes::ValType m_val_type;
 	
-	BufferQueueInOut* m_buffer_queue;
+	SortReduceUtils::MutexedQueue<SortReduceTypes::Block>* m_buffer_queue_in;
+
+	TempFileManager* mp_temp_file_manager;
+	SortReduceUtils::MutexedQueue<SortReduceTypes::File>* mq_temp_files;
 
 };
 
