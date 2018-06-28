@@ -16,6 +16,7 @@
 #include <thread>
 
 #include "blocksorter.h"
+#include "reducer.h"
 #include "types.h"
 #include "utils.h"
 
@@ -26,29 +27,6 @@ public:
 		MERGER_16TO1,
 	} MergerType;
 
-	class Config {
-	public:
-		Config(SortReduceTypes::KeyType key_type, SortReduceTypes::ValType val_type, int file_input, int file_output, std::string temporary_directory);
-		void SetUpdateFunction(uint32_t (*update32)(uint32_t,uint32_t) );
-		void SetUpdateFunction(uint64_t (*update64)(uint64_t,uint64_t) );
-	//private:
-		SortReduce::MergerType merger_type;
-
-		SortReduceTypes::KeyType key_type;
-		SortReduceTypes::ValType val_type;
-
-		int file_input;
-		int file_output;
-
-		std::string temporary_directory;
-
-		int maximum_threads;
-		size_t buffer_size;
-
-		uint32_t (*update32)(uint32_t,uint32_t);
-		uint64_t (*update64)(uint64_t,uint64_t);
-
-	};
 
 	class Status {
 	public:
@@ -59,12 +37,13 @@ public:
 
 
 public:
-	SortReduce(SortReduce::Config* config);
+	SortReduce(SortReduceTypes::Config* config);
+	~SortReduce();
 	bool PutBlock(void* buffer, size_t bytes);
 	size_t GetBlock(void* buffer);
 	SortReduce::Status CheckStatus();
 private:
-	SortReduce::Config* config;
+	SortReduceTypes::Config* m_config;
 
 	BlockSorter* mp_block_sorter;
 
@@ -72,6 +51,7 @@ private:
 	void ManagerThread();
 
 	SortReduceUtils::MutexedQueue<SortReduceTypes::File>* mq_temp_files;
+
 };
 
 #endif

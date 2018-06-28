@@ -10,6 +10,7 @@
 
 namespace SortReduceUtils {
 	double TimespecDiffSec( timespec start, timespec end );
+	size_t KeyBytes( SortReduceTypes::KeyType key_type );
 
 	template <class T>
 	class MutexedQueue {
@@ -37,7 +38,6 @@ namespace SortReduceUtils {
 		size_t deq_out(void** buffer);
 		int out_count();
 	};
-
 }
 
 

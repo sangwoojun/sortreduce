@@ -18,10 +18,16 @@ TempFileManager::TempFileManager(std::string path) {
 
 
 SortReduceTypes::File 
-TempFileManager::CreateFile(void* buffer, size_t bytes) {
+TempFileManager::CreateFile(void* buffer, size_t bytes, size_t valid_bytes, bool free_buffer_after_done) {
+	m_mutex.lock();
+	m_writing_bytes += bytes;
+	m_mutex.unlock();
+
+	printf( "Creating file %lu %lu\n", bytes, valid_bytes ); fflush(stdout);
+
 	int fd = open(m_base_path.c_str(), O_RDWR|O_DIRECT|O_TMPFILE, S_IRUSR|S_IWUSR);
 
-	WaitWrite(fd, buffer, bytes, 0);
+	WaitWrite(fd, buffer, bytes, valid_bytes, 0, free_buffer_after_done);
 
 	SortReduceTypes::File ret;
 	ret.fd = fd;
@@ -31,48 +37,29 @@ TempFileManager::CreateFile(void* buffer, size_t bytes) {
 }
 
 bool 
-TempFileManager::Write(int fd, void* buffer, size_t bytes, off_t offset) {
+TempFileManager::Write(int fd, void* buffer, size_t bytes, size_t valid_bytes, off_t offset, bool free_buffer_after_done) {
 	bool ret = false;
+
 		
-	int num_events = io_getevents(m_io_ctx, 0, AIO_DEPTH, ma_events, NULL);
-
+	CheckDone();
+	
 	m_mutex.lock();
-	for ( int i = 0; i < num_events; i++ ) {
-		struct io_event event = ma_events[i];
-		IocbArgs* arg = (IocbArgs*)event.data;
-		arg->busy = false;
-
-		if ( arg->write ) {
-			mq_free_bufs.push(arg->idx);
-			if ( arg->free_buffer_after_done ) {
-				free(arg->buffer);
-			}
-		}
-	}
-
-	while ( !mq_read_order_idx.empty() ) {
-		int next = mq_read_order_idx.front();
-		if ( ma_request_args[next].busy == false ) {
-			mq_free_bufs.push(next);
-			mq_read_order_idx.pop();
-			m_read_ready_count ++;
-		} else {
-			break;
-		}
-	}
 
 	if ( !mq_free_bufs.empty() ) {
 		int idx = mq_free_bufs.front();
 		mq_free_bufs.pop();
 
 		memset(&ma_iocb[idx], 0, sizeof(ma_iocb[idx]));
-		io_prep_pwrite(&ma_iocb[idx], fd, buffer, bytes, offset);
-		ma_request_args[idx].write = true;
-		ma_request_args[idx].busy = true;
-		ma_request_args[idx].buffer = buffer;
-		ma_request_args[idx].free_buffer_after_done = true;
+		io_prep_pwrite(&ma_iocb[idx], fd, buffer, valid_bytes, offset);
 
-		ma_iocb[idx].data = &ma_request_args[idx];
+		IocbArgs* args = &ma_request_args[idx];
+		args->bytes = bytes;
+		args->buffer = buffer;
+		args->write = true;
+		args->busy = true;
+		args->free_buffer_after_done = free_buffer_after_done;
+
+		ma_iocb[idx].data = args;
 
 		struct iocb* iocbs = &ma_iocb[idx];
 		int ret_count = io_submit(m_io_ctx, 1, &iocbs);
@@ -89,8 +76,39 @@ TempFileManager::Write(int fd, void* buffer, size_t bytes, off_t offset) {
 }
 
 void
-TempFileManager::WaitWrite(int fd, void* buffer, size_t bytes, off_t offset) {
-	while (!Write(fd, buffer, bytes, offset)) {
+TempFileManager::CheckDone() {
+	int num_events = io_getevents(m_io_ctx, 0, AIO_DEPTH, ma_events, NULL);
+	m_mutex.lock();
+	for ( int i = 0; i < num_events; i++ ) {
+		struct io_event event = ma_events[i];
+		IocbArgs* arg = (IocbArgs*)event.data;
+		arg->busy = false;
+
+		if ( arg->write ) {
+			mq_free_bufs.push(arg->idx);
+			if ( arg->free_buffer_after_done ) {
+				free(arg->buffer);
+				m_writing_bytes -= arg->bytes;
+			}
+		}
+	}
+
+	while ( !mq_read_order_idx.empty() ) {
+		int next = mq_read_order_idx.front();
+		if ( ma_request_args[next].busy == false ) {
+			mq_free_bufs.push(next);
+			mq_read_order_idx.pop();
+			m_read_ready_count ++;
+		} else {
+			break;
+		}
+	}
+	m_mutex.unlock();
+}
+
+void
+TempFileManager::WaitWrite(int fd, void* buffer, size_t bytes, size_t valid_bytes, off_t offset, bool free_buffer_after_done) {
+	while (!Write(fd, buffer, bytes, valid_bytes, offset, free_buffer_after_done)) {
 		usleep(50);
 	}
 }

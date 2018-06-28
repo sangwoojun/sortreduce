@@ -76,6 +76,25 @@ SortReduceUtils::TimespecDiffSec(timespec start, timespec end) {
 	return t;
 }
 
+size_t
+SortReduceUtils::KeyBytes(SortReduceTypes::KeyType key_type ) {
+	size_t ret = 0;
+	switch (key_type) {
+		case SortReduceTypes::KEY_BINARY32: {
+			ret = sizeof(uint32_t);
+			break;
+		}
+		case SortReduceTypes::KEY_BINARY64: {
+			ret = sizeof(uint64_t);
+			break;
+		}
+		default: {
+			fprintf(stderr, "Unhandled key type in %s:%d\n", __FILE__, __LINE__ );
+		}
+	}
+	return ret;
+}
+
 template <class T>
 SortReduceUtils::MutexedQueue<T>::MutexedQueue() {
 }
