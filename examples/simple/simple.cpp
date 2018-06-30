@@ -12,7 +12,8 @@ int main(int argc, char** argv) {
 
 	SortReduceTypes::Config<uint32_t,uint32_t>* conf = new SortReduceTypes::Config<uint32_t,uint32_t>(0, 0, "./");
 	conf->SetUpdateFunction(&update_function);
-	conf->SetMaxBytesInFlight(1024*1024*1024); //1GB
+	//conf->SetMaxBytesInFlight(1024*1024*1024); //1GB
+	conf->SetManagedBufferSize(1024*1024*32, 64); // 2 GB
 	
 	SortReduce<uint32_t,uint32_t>* sr = new SortReduce<uint32_t,uint32_t>(conf);
 

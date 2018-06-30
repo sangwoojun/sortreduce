@@ -35,7 +35,8 @@ public:
 
 public:
 	//write to m_cur_update_block until it's full
-	void Update(K key, V val);
+	//returns false if no remaining buffers
+	bool Update(K key, V val);
 private:
 	SortReduceTypes::Block m_cur_update_block;
 	size_t m_cur_update_offset;

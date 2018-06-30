@@ -55,8 +55,28 @@ SortReduce<K,V>::CheckStatus() {
 
 
 template <class K, class V>
-void
+bool
 SortReduce<K,V>::Update(K key, V val) {
+
+	//catches cold updates with no cur_update_block and when cur_update_block is full
+	if ( m_cur_update_offset + sizeof(K) + sizeof(V) > m_cur_update_block.bytes ) {
+		if ( m_cur_update_block.buffer != NULL ) { // or managed_idx < 0 or bytes = 0
+			m_cur_update_block.valid_bytes  = m_cur_update_offset;
+			mp_block_sorter->PutManagedBlock(m_cur_update_block);
+			m_cur_update_block.buffer = NULL;
+		}
+		m_cur_update_block = mp_block_sorter->GetFreeManagedBlock();
+		if ( m_cur_update_block.buffer == NULL ) return false;
+	}
+
+	K* cur_key_ptr = (K*)((uint8_t*)m_cur_update_block.buffer + m_cur_update_offset);
+	*cur_key_ptr = key;
+	V* cur_val_ptr = (V*)((uint8_t*)m_cur_update_block.buffer + m_cur_update_offset + sizeof(K));
+	*cur_val_ptr = val;
+
+	m_cur_update_offset += sizeof(K)+sizeof(V);
+
+	return true;
 }
 
 template <class K, class V>

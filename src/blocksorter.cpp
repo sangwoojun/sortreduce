@@ -4,6 +4,7 @@
 TODO
 Remove mp_temp_file_manager
 Merge PutBlock, PutManagedBlock?
+Use valid_bytes to determine how to sort <- come non-local fixing required 
 
 
 **/
