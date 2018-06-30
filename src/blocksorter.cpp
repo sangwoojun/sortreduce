@@ -1,13 +1,21 @@
 #include "blocksorter.h"
 
-BlockSorter::BlockSorter(SortReduceTypes::Config* config, SortReduceTypes::KeyType key_type, SortReduceTypes::ValType val_type, SortReduceUtils::MutexedQueue<SortReduceTypes::File>* temp_files, std::string temp_path, size_t buffer_size, int buffer_count, int max_threads) {
+/**
+TODO
+Remove mp_temp_file_manager
+Merge PutBlock, PutManagedBlock?
+
+
+**/
+
+template <class K, class V>
+BlockSorter<K,V>::BlockSorter(SortReduceTypes::Config<K,V>* config, SortReduceUtils::MutexedQueue<SortReduceTypes::File>* temp_files, std::string temp_path, size_t buffer_size, int buffer_count, int max_threads) {
 
 	this->m_buffer_queue_in = new SortReduceUtils::MutexedQueue<SortReduceTypes::Block>();
+	this->m_buffer_queue_out = new SortReduceUtils::MutexedQueue<SortReduceTypes::Block>();
 
 	this->mp_config = config;
 
-	this->m_key_type = key_type;
-	this->m_val_type = val_type;
 	this->m_maximum_threads = max_threads;
 
 	clock_gettime(CLOCK_REALTIME, &this->m_last_thread_check_time);
@@ -26,11 +34,13 @@ BlockSorter::BlockSorter(SortReduceTypes::Config* config, SortReduceTypes::KeyTy
 
 		// unallocated, or free'd buffers MUST be marked NULL
 		mpp_managed_buffers[i] = NULL;
-		mq_free_managed_buffers.push(i);
+		// so that first pop gets 0, not buffer_count-1
+		ms_free_managed_buffers.push(buffer_count-1-i);
 	}
 }
 
-BlockSorter::~BlockSorter() {
+template <class K, class V>
+BlockSorter<K,V>::~BlockSorter() {
 	for ( int i = 0; i < m_buffer_count; i++ ) {
 		if ( mpp_managed_buffers[i] != NULL ) free(mpp_managed_buffers[i]);
 	}
@@ -38,8 +48,9 @@ BlockSorter::~BlockSorter() {
 
 }
 
+template <class K, class V>
 void 
-BlockSorter::PutBlock(void* buffer, size_t bytes) {
+BlockSorter<K,V>::PutBlock(void* buffer, size_t bytes) {
 	SortReduceTypes::Block b;
 	b.buffer = buffer; 
 	b.bytes = bytes;
@@ -49,11 +60,49 @@ BlockSorter::PutBlock(void* buffer, size_t bytes) {
 	m_status.bytes_inflight += bytes;
 }
 
+template <class K, class V>
+SortReduceTypes::Block
+BlockSorter<K,V>::GetBlock() {
+	return m_buffer_queue_out->get();
+}
+
+template <class K, class V>
+SortReduceTypes::Block
+BlockSorter<K,V>::GetFreeManagedBlock() {
+	SortReduceTypes::Block b;
+
+	if ( ms_free_managed_buffers.empty() ) {
+		b.buffer = NULL;
+	} else {
+		int idx = ms_free_managed_buffers.top();
+		ms_free_managed_buffers.pop();
+		if ( mpp_managed_buffers[idx] == NULL ) {
+			mpp_managed_buffers[idx] = aligned_alloc(512, m_buffer_size);
+		}
+		b.buffer = mpp_managed_buffers[idx];
+		b.bytes = m_buffer_size;
+		b.managed = true;
+	}
+
+	return b;
+}
+
+template <class K, class V>
+void 
+BlockSorter<K,V>::PutManagedBlock(SortReduceTypes::Block block) {
+	if ( block.managed == false || block.managed_idx < 0 ) {
+		return;
+	}
+	
+	m_buffer_queue_in->push(block);
+}
+
 /**
 	Should be called by manager thread
 **/
+template <class K, class V>
 void
-BlockSorter::CheckSpawnThreads() {
+BlockSorter<K,V>::CheckSpawnThreads() {
 	//TODO move this to a separate function?
 	mp_temp_file_manager->CheckDone();
 
@@ -68,7 +117,7 @@ BlockSorter::CheckSpawnThreads() {
 		if ( m_buffer_queue_in->size() > 0 && mv_sorter_threads.size() == 0 ) {
 			// Increase thread count
 			if ( mv_sorter_threads.size() < m_maximum_threads ) {
-				BlockSorterThread* new_thread = new BlockSorterThread(this->mp_config, this->m_key_type, this->m_val_type, this->m_buffer_queue_in, this->mp_temp_file_manager, this->mq_temp_files, &this->m_status);
+				BlockSorterThread<K,V>* new_thread = new BlockSorterThread<K,V>(this->mp_config, this->m_buffer_queue_in, this->m_buffer_queue_out, this->mp_temp_file_manager, this->mq_temp_files, &this->m_status);
 				mv_sorter_threads.push_back(new_thread);
 			}
 		}
@@ -77,7 +126,7 @@ BlockSorter::CheckSpawnThreads() {
 
 			// Increase thread count
 			if ( mv_sorter_threads.size() < m_maximum_threads ) {
-				BlockSorterThread* new_thread = new BlockSorterThread(this->mp_config, this->m_key_type, this->m_val_type, this->m_buffer_queue_in, this->mp_temp_file_manager, this->mq_temp_files, &this->m_status);
+				BlockSorterThread<K,V>* new_thread = new BlockSorterThread<K,V>(this->mp_config, this->m_buffer_queue_in, this->m_buffer_queue_out, this->mp_temp_file_manager, this->mq_temp_files, &this->m_status);
 				mv_sorter_threads.push_back(new_thread);
 			}
 		}
@@ -97,94 +146,63 @@ BlockSorter::CheckSpawnThreads() {
 	}
 }
 
+template <class K, class V>
 size_t
-BlockSorter::BytesInFlight() {
+BlockSorter<K,V>::BytesInFlight() {
 	return mp_temp_file_manager->BytesInFlight() + m_status.bytes_inflight;
 }
 
 /*
 size_t 
-BlockSorter::GetBlock(void* buffer) {
+BlockSorter<K,V>::GetBlock(void* buffer) {
 	size_t ret = m_buffer_queue->deq_out(&buffer);
 	return ret;
 }
 */
-
-BlockSorterThread::BlockSorterThread(SortReduceTypes::Config* config, SortReduceTypes::KeyType key_type, SortReduceTypes::ValType val_type, SortReduceUtils::MutexedQueue<SortReduceTypes::Block>* buffer_queue, TempFileManager* file_manager, SortReduceUtils::MutexedQueue<SortReduceTypes::File>* temp_files, SortReduceTypes::ComponentStatus* status) {
+template <class K, class V>
+BlockSorterThread<K,V>::BlockSorterThread(SortReduceTypes::Config<K,V>* config, SortReduceUtils::MutexedQueue<SortReduceTypes::Block>* buffer_queue_in, SortReduceUtils::MutexedQueue<SortReduceTypes::Block>* buffer_queue_out, TempFileManager* file_manager, SortReduceUtils::MutexedQueue<SortReduceTypes::File>* temp_files, SortReduceTypes::ComponentStatus* status) {
 	m_exit = false;
-	m_buffer_queue_in = buffer_queue;
-	m_key_type = key_type;
-	m_val_type = val_type;
+	m_buffer_queue_in = buffer_queue_in;
+	m_buffer_queue_out = buffer_queue_out;
 	mp_config = config;
 
-	m_thread = std::thread(&BlockSorterThread::SorterThread, this);
+	m_thread = std::thread(&BlockSorterThread<K,V>::SorterThread, this);
 	mp_file_manager = file_manager;
 	mq_temp_files = temp_files;
 
 	mp_status = status;
 }
 	
-template <class tKV>
+template <class K, class V>
 void 
-BlockSorterThread::SortKV(void* buffer, size_t bytes) {
-	tKV* tbuffer = (tKV*)buffer;
-	size_t count = bytes/sizeof(tKV);
-	std::sort(tbuffer, tbuffer+count, BlockSorterThread::CompareKV<tKV>);
+BlockSorterThread<K,V>::SortKV(void* buffer, size_t bytes) {
+	KvPair* tbuffer = (KvPair*)buffer;
+	size_t count = bytes/sizeof(KvPair);
+	std::sort(tbuffer, tbuffer+count, BlockSorterThread<K,V>::CompareKV);
 
 }
-// Explicit instantitation to go across library boundaries
-template void BlockSorterThread::SortKV<BlockSorterThread::tK32_V32>(void* buffer, size_t bytes);
-template void BlockSorterThread::SortKV<BlockSorterThread::tK32_V64>(void* buffer, size_t bytes);
-template void BlockSorterThread::SortKV<BlockSorterThread::tK64_V32>(void* buffer, size_t bytes);
-template void BlockSorterThread::SortKV<BlockSorterThread::tK64_V64>(void* buffer, size_t bytes);
 
-template <class tKV>
+template <class K, class V>
 bool 
-BlockSorterThread::CompareKV(tKV a, tKV b) {
+BlockSorterThread<K,V>::CompareKV(KvPair a, KvPair b) {
 	return (a.key < b.key);
 }
 
+template <class K, class V>
 void
-BlockSorterThread::SorterThread() {
+BlockSorterThread<K,V>::SorterThread() {
 	printf( "BlockSorterThread created!\n" );
 	while ( !m_exit ) {
 		SortReduceTypes::Block block;
 		block = m_buffer_queue_in->get();
 		size_t bytes = block.bytes;
 		void* buffer = block.buffer;
-		bool managed = block.managed;
 
 		if ( bytes <= 0 ) continue;
 
-		size_t reduced_bytes = bytes;
+		BlockSorterThread<K,V>::SortKV(buffer, bytes);
+		size_t reduced_bytes = SortReduceReducer::ReduceInBuffer<K,V>(mp_config->update, buffer, bytes);
 
-		if ( m_key_type == SortReduceTypes::KEY_BINARY32 && m_val_type == SortReduceTypes::VAL_BINARY32 ) {
-			BlockSorterThread::SortKV<tK32_V32>(buffer, bytes);
-			reduced_bytes = SortReduceReducer::ReduceInBuffer<uint32_t,uint32_t>(mp_config->update32, buffer, bytes);
-		}
-		else if ( m_key_type == SortReduceTypes::KEY_BINARY32 && m_val_type == SortReduceTypes::VAL_BINARY64 ) {
-			BlockSorterThread::SortKV<tK32_V64>(buffer, bytes);
-			//reduced_bytes = SortReduceReducer::ReduceInBuffer<uint32_t,uint64_t>(mp_config->update32, buffer, bytes);
-		}
-		else if ( m_key_type == SortReduceTypes::KEY_BINARY64 && m_val_type == SortReduceTypes::VAL_BINARY32 ) {
-			BlockSorterThread::SortKV<tK64_V32>(buffer, bytes);
-		}
-		else if ( m_key_type == SortReduceTypes::KEY_BINARY64 && m_val_type == SortReduceTypes::VAL_BINARY64 ) {
-			BlockSorterThread::SortKV<tK64_V64>(buffer, bytes);
-		}
-		else {
-			fprintf(stderr, "BlockSorterThread undefined key value types %s:%d\n", __FILE__, __LINE__ );
-		}
-
-/*
-		if ( m_val_type == SortReduceTypes::VAL_BINARY32 ) {
-			reduced_bytes = SortReduceReducer::ReduceInBuffer32(mp_config->update32, m_key_type, buffer, bytes);
-		} else if ( m_val_type == SortReduceTypes::VAL_BINARY64 ) {
-			reduced_bytes = SortReduceReducer::ReduceInBuffer64(mp_config->update64, m_key_type, buffer, bytes);
-		} else {
-			fprintf(stderr, "BlockSorterThread undefined key value types %s:%d\n", __FILE__, __LINE__ );
-		}
-*/
 		/*
 		uint32_t last_key = 0;
 		for ( int i = 0; i < 1024*1024; i++ ) {
@@ -197,17 +215,33 @@ BlockSorterThread::SorterThread() {
 		*/
 
 		// non-managed buffers are freed after writing to file
-		SortReduceTypes::File new_file = mp_file_manager->CreateFile(buffer, bytes,reduced_bytes, !managed);
-		mp_status->bytes_inflight -= bytes;
+		if ( !block.managed ) {
+			mp_status->bytes_inflight -= bytes;
+		}
+		block.valid_bytes = reduced_bytes;
+		m_buffer_queue_out->push(block);
 
-		mq_temp_files->push(new_file);
+		//SortReduceTypes::File new_file = mp_file_manager->CreateFile(buffer, bytes,reduced_bytes, !managed);
+		//mq_temp_files->push(new_file);
+
 	}
 }
 
+template <class K, class V>
 void
-BlockSorterThread::Exit() {
+BlockSorterThread<K,V>::Exit() {
 	//Mark thread to exit after current work
 	m_exit = true;
 	//Detach thread so resoures will be released after
 	m_thread.detach();
 }
+
+template class BlockSorter<uint32_t,uint32_t>;
+template class BlockSorter<uint32_t,uint64_t>;
+template class BlockSorter<uint64_t,uint32_t>;
+template class BlockSorter<uint64_t,uint64_t>;
+
+template class BlockSorterThread<uint32_t,uint32_t>;
+template class BlockSorterThread<uint32_t,uint64_t>;
+template class BlockSorterThread<uint64_t,uint32_t>;
+template class BlockSorterThread<uint64_t,uint64_t>;

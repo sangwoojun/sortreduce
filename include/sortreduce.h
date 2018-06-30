@@ -20,32 +20,30 @@
 #include "types.h"
 #include "utils.h"
 
+template <class K, class V>
 class SortReduce {
 public:
-	typedef enum {
-		MERGER_2TO1,
-		MERGER_16TO1,
-	} MergerType;
 
-
-	class Status {
-	public:
-		Status();
-		bool done;
-	private:
-	};
 
 
 public:
-	SortReduce(SortReduceTypes::Config* config);
+	SortReduce(SortReduceTypes::Config<K,V>* config);
 	~SortReduce();
 	bool PutBlock(void* buffer, size_t bytes);
 	size_t GetBlock(void* buffer);
-	SortReduce::Status CheckStatus();
-private:
-	SortReduceTypes::Config* m_config;
+	SortReduceTypes::Status CheckStatus();
 
-	BlockSorter* mp_block_sorter;
+public:
+	//write to m_cur_update_block until it's full
+	void Update(K key, V val);
+private:
+	SortReduceTypes::Block m_cur_update_block;
+	size_t m_cur_update_offset;
+
+private:
+	SortReduceTypes::Config<K,V>* m_config;
+
+	BlockSorter<K,V>* mp_block_sorter;
 
 	std::thread manager_thread;
 	void ManagerThread();

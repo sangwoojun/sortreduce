@@ -9,39 +9,29 @@ consolidate arguments to blocksorter/blocksorterthread into one config*
 **/
 
 
-SortReduce::SortReduce(SortReduceTypes::Config *config) {
+template <class K, class V>
+SortReduce<K,V>::SortReduce(SortReduceTypes::Config<K,V> *config) {
 	this->m_config = config;
-	switch (config->val_type) {
-		case SortReduceTypes::VAL_BINARY32: {
-			if ( config->update32 == NULL ) {
-				fprintf(stderr, "ERROR: Update function for VAL_BINARY32 not supplied\n" );
-				return;
-			}
-			break;
-		}
-		case SortReduceTypes::VAL_BINARY64: {
-			if ( config->update64 == NULL ) {
-				fprintf(stderr, "ERROR: Update function for VAL_BINARY64 not supplied\n" );
-				return;
-			}
-			break;
-		}
+	if ( config->update == NULL ) {
+		fprintf(stderr, "ERROR: Update function not supplied\n" );
+		return;
 	}
-
 	mq_temp_files = new SortReduceUtils::MutexedQueue<SortReduceTypes::File>();
 
-	mp_block_sorter = new BlockSorter(config, config->key_type, config->val_type, mq_temp_files, config->temporary_directory, config->buffer_size, config->buffer_count, config->maximum_threads/2); //FIXME thread count
+	mp_block_sorter = new BlockSorter<K,V>(config, mq_temp_files, config->temporary_directory, config->buffer_size, config->buffer_count, config->maximum_threads/2); //FIXME thread count
 
-	manager_thread = std::thread(&SortReduce::ManagerThread, this);
+	manager_thread = std::thread(&SortReduce<K,V>::ManagerThread, this);
 }
 
-SortReduce::~SortReduce() {
+template <class K, class V>
+SortReduce<K,V>::~SortReduce() {
 	delete mq_temp_files;
 	delete mp_block_sorter;
 }
 
+template <class K, class V>
 bool 
-SortReduce::PutBlock(void* buffer, size_t bytes) {
+SortReduce<K,V>::PutBlock(void* buffer, size_t bytes) {
 	size_t bytes_inflight = mp_block_sorter->BytesInFlight();
 	if ( bytes_inflight + bytes < m_config->max_bytes_inflight ) {
 		mp_block_sorter->PutBlock(buffer,bytes);
@@ -49,29 +39,41 @@ SortReduce::PutBlock(void* buffer, size_t bytes) {
 	} else return false;
 }
 
+template <class K, class V>
 size_t
-SortReduce::GetBlock(void* buffer) {
+SortReduce<K,V>::GetBlock(void* buffer) {
 	return 0;
 }
 
 
-SortReduce::Status 
-SortReduce::CheckStatus() {
-	SortReduce::Status status;
+template <class K, class V>
+SortReduceTypes::Status 
+SortReduce<K,V>::CheckStatus() {
+	SortReduceTypes::Status status;
 	return status;
 }
 
+
+template <class K, class V>
 void
-SortReduce::ManagerThread() {
+SortReduce<K,V>::Update(K key, V val) {
+}
+
+template <class K, class V>
+void
+SortReduce<K,V>::ManagerThread() {
 	//printf( "maximum threads: %d\n", config->maximum_threads );
 
 	while (true) {
 		sleep(1);
 		mp_block_sorter->CheckSpawnThreads();
+
+		// if GetBlock() returns more than ...say 16, spawn a merge-reducer
 	}
 }
 
 
-SortReduce::Status::Status() {
-	this->done = false;
-}
+template class SortReduce<uint32_t,uint32_t>;
+template class SortReduce<uint32_t,uint64_t>;
+template class SortReduce<uint64_t,uint32_t>;
+template class SortReduce<uint64_t,uint64_t>;

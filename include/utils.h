@@ -10,7 +10,6 @@
 
 namespace SortReduceUtils {
 	double TimespecDiffSec( timespec start, timespec end );
-	size_t KeyBytes( SortReduceTypes::KeyType key_type );
 
 	template <class T>
 	class MutexedQueue {

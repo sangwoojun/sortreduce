@@ -9,21 +9,16 @@
 #include <thread>
 
 namespace SortReduceTypes {
-	typedef enum {
-		KEY_BINARY32,
-		KEY_BINARY64,
-	} KeyType;
-	typedef enum {
-		VAL_BINARY32,
-		VAL_BINARY64,
-	} ValType;
-
 	typedef struct {
-		void* buffer;
-		size_t bytes;
+		void* buffer = NULL;
+		size_t bytes = 0;
+		size_t valid_bytes = 0;
 
 		// Buffers are allocated in the library and reused, instead of free'd
-		bool managed;
+		bool managed = false;
+		int managed_idx = -1;
+
+		bool last = false;
 	} Block;
 
 	typedef struct {
@@ -36,17 +31,15 @@ namespace SortReduceTypes {
 	}ComponentStatus;
 
 
+	template <class K, class V>
 	class Config {
 	public:
-		Config(SortReduceTypes::KeyType key_type, SortReduceTypes::ValType val_type, int file_input, int file_output, std::string temporary_directory);
-		void SetUpdateFunction(uint32_t (*update32)(uint32_t,uint32_t) );
-		void SetUpdateFunction(uint64_t (*update64)(uint64_t,uint64_t) );
+		Config(int file_input, int file_output, std::string temporary_directory);
+		void SetUpdateFunction(V (*update)(V,V) );
+		//void SetUpdateFunction(uint64_t (*update64)(uint64_t,uint64_t) );
 		void SetManagedBufferSize(size_t buffer_size, int buffer_count);
 		void SetMaxBytesInFlight(size_t bytes);
 	//private:
-
-		SortReduceTypes::KeyType key_type;
-		SortReduceTypes::ValType val_type;
 
 		int file_input;
 		int file_output;
@@ -55,13 +48,19 @@ namespace SortReduceTypes {
 
 		int maximum_threads;
 
-		uint32_t (*update32)(uint32_t,uint32_t);
-		uint64_t (*update64)(uint64_t,uint64_t);
+		V (*update)(V,V);
 
 		size_t buffer_size;
 		int buffer_count;
 
 		size_t max_bytes_inflight;
+	};
+
+	class Status {
+	public:
+		Status();
+		bool done;
+	private:
 	};
 }
 

@@ -29,3 +29,35 @@ template size_t SortReduceReducer::ReduceInBuffer<uint32_t, uint32_t>(uint32_t (
 template size_t SortReduceReducer::ReduceInBuffer<uint32_t, uint64_t>(uint64_t (*update)(uint64_t,uint64_t), void* buffer, size_t bytes);
 template size_t SortReduceReducer::ReduceInBuffer<uint64_t, uint32_t>(uint32_t (*update)(uint32_t,uint32_t), void* buffer, size_t bytes);
 template size_t SortReduceReducer::ReduceInBuffer<uint64_t, uint64_t>(uint64_t (*update)(uint64_t,uint64_t), void* buffer, size_t bytes);
+
+template <class K, class V>
+SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::StreamMergeReducer_SinglePriority(int src_count, V (*update)(V,V)) {
+}
+
+template <class K, class V>
+SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::~StreamMergeReducer_SinglePriority() {
+}
+
+template <class K, class V>
+bool
+SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::PutBlock(
+	SortReduceTypes::Block block, int src) {
+
+	return false;
+}
+
+template <class K, class V>
+int
+SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::GetFreeSrc() {
+	return 0;
+}
+
+template <class K, class V>
+SortReduceTypes::Block
+SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::GetBlock() {
+	SortReduceTypes::Block ret;
+	return ret;
+}
+
+
+//template size_t SortReduceReducer::ReduceInBuffer<uint32_t,uint32_t>(uint32_t (*update)(uint32_t,uint32_t), void* buffer, size_t bytes);

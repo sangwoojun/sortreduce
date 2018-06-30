@@ -10,11 +10,11 @@ uint32_t update_function(uint32_t a, uint32_t b) {
 int main(int argc, char** argv) {
 	srand(time(0));
 
-	SortReduceTypes::Config* conf = new SortReduceTypes::Config(SortReduceTypes::KEY_BINARY32, SortReduceTypes::VAL_BINARY32, 0, 0, "./");
+	SortReduceTypes::Config<uint32_t,uint32_t>* conf = new SortReduceTypes::Config<uint32_t,uint32_t>(0, 0, "./");
 	conf->SetUpdateFunction(&update_function);
 	conf->SetMaxBytesInFlight(1024*1024*1024); //1GB
 	
-	SortReduce* sr = new SortReduce(conf);
+	SortReduce<uint32_t,uint32_t>* sr = new SortReduce<uint32_t,uint32_t>(conf);
 
 	uint32_t* input_buffer = (uint32_t*)aligned_alloc(512,1024*1024*32); //32MB
 	for ( uint32_t i = 0; i < 1024*1024*32/sizeof(uint32_t)/2; i++ ) {
