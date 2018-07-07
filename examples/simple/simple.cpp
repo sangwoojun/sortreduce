@@ -1,6 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <chrono>
+#include <ctime>
+
 #include "sortreduce.h"
 
 uint32_t update_function(uint32_t a, uint32_t b) {
@@ -22,7 +25,7 @@ int main(int argc, char** argv) {
 		input_buffer[i*2] = rand();
 		input_buffer[i*2+1] = 0xcc;
 	}
-	if ( !sr->PutBlock(input_buffer, 1024*1024*32) ) {
+	if ( !sr->PutBlock(input_buffer, 1024*1024*32, true) ) {
 		printf( "PutBlock failed\n" ); fflush(stdout);
 	}
 

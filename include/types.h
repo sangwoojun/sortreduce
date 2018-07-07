@@ -15,20 +15,25 @@ namespace SortReduceTypes {
 		size_t valid_bytes = 0;
 
 		// Buffers are allocated in the library and reused, instead of free'd
-		bool managed = false;
 		int managed_idx = -1;
+		bool managed = false;
 
 		bool last = false;
+
+		// Used to indicate null values (e.g., return from empty queue)
+		// Blocks with no data should be indicated with bytes=0
+		bool valid = false;
 	} Block;
 
-	typedef struct {
+	class File {
+	public:
 		int fd;
-		//size_t bytes;
-	} File;
+		size_t bytes;
+	};
 
 	typedef struct {
 		std::atomic<size_t> bytes_inflight;
-	}ComponentStatus;
+	} ComponentStatus;
 
 
 	template <class K, class V>

@@ -14,7 +14,9 @@
 #include <queue>
 #include <string>
 #include <thread>
+#include <vector>
 
+#include "alignedbuffermanager.h"
 #include "blocksorter.h"
 #include "reducer.h"
 #include "types.h"
@@ -29,14 +31,14 @@ public:
 public:
 	SortReduce(SortReduceTypes::Config<K,V>* config);
 	~SortReduce();
-	bool PutBlock(void* buffer, size_t bytes);
+	bool PutBlock(void* buffer, size_t bytes, bool last);
 	size_t GetBlock(void* buffer);
 	SortReduceTypes::Status CheckStatus();
 
 public:
 	//write to m_cur_update_block until it's full
 	//returns false if no remaining buffers
-	bool Update(K key, V val);
+	bool Update(K key, V val, bool last);
 private:
 	SortReduceTypes::Block m_cur_update_block;
 	size_t m_cur_update_offset;
@@ -50,6 +52,10 @@ private:
 	void ManagerThread();
 
 	SortReduceUtils::MutexedQueue<SortReduceTypes::File>* mq_temp_files;
+
+	bool m_done_input;
+
+	std::vector<SortReduceReducer::StreamMergeReducer<K,V>*> mv_stream_mergers;
 
 };
 

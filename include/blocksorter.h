@@ -20,7 +20,7 @@
 template <class K, class V>
 class BlockSorterThread {
 public:
-	BlockSorterThread(SortReduceTypes::Config<K,V>* config, SortReduceUtils::MutexedQueue<SortReduceTypes::Block>* buffer_queue_in, SortReduceUtils::MutexedQueue<SortReduceTypes::Block>* buffer_queue_out, TempFileManager* file_manager, SortReduceUtils::MutexedQueue<SortReduceTypes::File>* temp_files, SortReduceTypes::ComponentStatus* status);
+	BlockSorterThread(SortReduceTypes::Config<K,V>* config, SortReduceUtils::MutexedQueue<SortReduceTypes::Block>* buffer_queue_in, SortReduceUtils::MutexedQueue<SortReduceTypes::Block>* buffer_queue_out, SortReduceUtils::MutexedQueue<SortReduceTypes::File>* temp_files, SortReduceTypes::ComponentStatus* status);
 	void Exit();
 
 	typedef struct __attribute__ ((__packed__)) {K key; V val;} KvPair;
@@ -41,7 +41,6 @@ private:
 	SortReduceUtils::MutexedQueue<SortReduceTypes::Block>* m_buffer_queue_out;
 
 
-	TempFileManager* mp_file_manager;
 	
 	SortReduceUtils::MutexedQueue<SortReduceTypes::File>* mq_temp_files;
 
@@ -55,8 +54,9 @@ public:
 	BlockSorter(SortReduceTypes::Config<K,V>* config, SortReduceUtils::MutexedQueue<SortReduceTypes::File>* temp_files, std::string temp_path, size_t buffer_size, int buffer_count, int max_threads);
 	~BlockSorter();
 
-	void PutBlock(void* buffer, size_t bytes);
+	void PutBlock(void* buffer, size_t bytes, bool last);
 	SortReduceTypes::Block GetBlock();
+	size_t GetBlockCount() { return m_buffer_queue_out->size(); }
 
 	//size_t GetBlock(void* buffer);
 	void CheckSpawnThreads();
@@ -80,7 +80,7 @@ private:
 	SortReduceUtils::MutexedQueue<SortReduceTypes::Block>* m_buffer_queue_in;
 	SortReduceUtils::MutexedQueue<SortReduceTypes::Block>* m_buffer_queue_out;
 
-	TempFileManager* mp_temp_file_manager;
+	//TempFileManager* mp_temp_file_manager;
 	SortReduceUtils::MutexedQueue<SortReduceTypes::File>* mq_temp_files;
 
 	size_t m_buffer_size;

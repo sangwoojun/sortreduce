@@ -22,9 +22,14 @@ class TempFileManager {
 public:
 	TempFileManager(std::string path);
 
-	SortReduceTypes::File CreateFile(void* buffer, size_t bytes, size_t valid_bytes, bool free_buffer_after_done);
-	bool Write(int fd, void* buffer, size_t bytes, size_t valid_bytes, off_t offset, bool free_buffer_after_done);
-	void WaitWrite(int fd, void* buffer, size_t bytes, size_t valid_bytes, off_t offset, bool free_buffer_after_done);
+	//SortReduceTypes::File* CreateFile(void* buffer, size_t bytes, size_t valid_bytes, bool free_buffer_after_done);
+	SortReduceTypes::File* CreateEmptyFile();
+	//bool Write(int fd, void* buffer, size_t bytes, size_t valid_bytes, off_t offset, bool free_buffer_after_done);
+	bool Write(SortReduceTypes::File* file, SortReduceTypes::Block block, off_t offset);
+	int Read(SortReduceTypes::File* file, off_t offset, size_t bytes, void* buffer);
+	int ReadStatus(bool clear);
+	//int PeekReadStatus();
+
 	void Close(int fd);
 
 	int CountInFlight();
@@ -50,15 +55,18 @@ private:
 		size_t bytes;
 		//TODO If free_buffer_after_done is not set, return to buffer pool
 		bool free_buffer_after_done;
+
+		SortReduceTypes::File* file = NULL;
 	} IocbArgs;
 	IocbArgs ma_request_args[AIO_DEPTH];
-	std::queue<int> mq_read_order_idx;
 
+	std::queue<int> mq_read_order_idx;
 	int m_read_ready_count;
+
+
 
 	// Size (in bytes) of buffers waiting to be written to storage
 	size_t m_writing_bytes;
-
 };
 
 

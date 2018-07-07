@@ -12,6 +12,9 @@ Use valid_bytes to determine how to sort <- come non-local fixing required
 template <class K, class V>
 BlockSorter<K,V>::BlockSorter(SortReduceTypes::Config<K,V>* config, SortReduceUtils::MutexedQueue<SortReduceTypes::File>* temp_files, std::string temp_path, size_t buffer_size, int buffer_count, int max_threads) {
 
+	AlignedBufferManager* buffer_manager = AlignedBufferManager::GetInstance();
+	buffer_manager->Init(1024*1024*4, 128); //FIXME fixed to 4 MB
+
 	this->m_buffer_queue_in = new SortReduceUtils::MutexedQueue<SortReduceTypes::Block>();
 	this->m_buffer_queue_out = new SortReduceUtils::MutexedQueue<SortReduceTypes::Block>();
 
@@ -24,7 +27,7 @@ BlockSorter<K,V>::BlockSorter(SortReduceTypes::Config<K,V>* config, SortReduceUt
 	// How many items in the queue before spawning another thread?
 	this->m_in_queue_spawn_limit_blocks = 4;
 	this->m_out_queue_spawn_limit_blocks = 4;
-	this->mp_temp_file_manager = new TempFileManager(temp_path);
+	//this->mp_temp_file_manager = new TempFileManager(temp_path);
 	this->mq_temp_files = temp_files;
 
 	this->m_buffer_size = buffer_size;
@@ -51,11 +54,13 @@ BlockSorter<K,V>::~BlockSorter() {
 
 template <class K, class V>
 void 
-BlockSorter<K,V>::PutBlock(void* buffer, size_t bytes) {
+BlockSorter<K,V>::PutBlock(void* buffer, size_t bytes, bool last) {
 	SortReduceTypes::Block b;
 	b.buffer = buffer; 
 	b.bytes = bytes;
 	b.managed = false;
+	b.valid = true;
+	b.last = last;
 	m_buffer_queue_in->push(b);
 
 	m_status.bytes_inflight += bytes;
@@ -74,6 +79,7 @@ BlockSorter<K,V>::GetFreeManagedBlock() {
 
 	if ( ms_free_managed_buffers.empty() ) {
 		b.buffer = NULL;
+		b.valid = false;
 	} else {
 		int idx = ms_free_managed_buffers.top();
 		ms_free_managed_buffers.pop();
@@ -83,6 +89,7 @@ BlockSorter<K,V>::GetFreeManagedBlock() {
 		b.buffer = mpp_managed_buffers[idx];
 		b.bytes = m_buffer_size;
 		b.managed = true;
+		b.valid = true;
 	}
 
 	return b;
@@ -105,7 +112,7 @@ template <class K, class V>
 void
 BlockSorter<K,V>::CheckSpawnThreads() {
 	//TODO move this to a separate function?
-	mp_temp_file_manager->CheckDone();
+	//mp_temp_file_manager->CheckDone();
 
 	timespec cur_time;
 	clock_gettime(CLOCK_REALTIME, &cur_time);
@@ -118,16 +125,16 @@ BlockSorter<K,V>::CheckSpawnThreads() {
 		if ( m_buffer_queue_in->size() > 0 && mv_sorter_threads.size() == 0 ) {
 			// Increase thread count
 			if ( mv_sorter_threads.size() < m_maximum_threads ) {
-				BlockSorterThread<K,V>* new_thread = new BlockSorterThread<K,V>(this->mp_config, this->m_buffer_queue_in, this->m_buffer_queue_out, this->mp_temp_file_manager, this->mq_temp_files, &this->m_status);
+				BlockSorterThread<K,V>* new_thread = new BlockSorterThread<K,V>(this->mp_config, this->m_buffer_queue_in, this->m_buffer_queue_out, this->mq_temp_files, &this->m_status);
 				mv_sorter_threads.push_back(new_thread);
 			}
 		}
-		else if ( m_buffer_queue_in->size() > m_in_queue_spawn_limit_blocks &&
-			mp_temp_file_manager->CountFreeBuffers() < (int)m_out_queue_spawn_limit_blocks ) {
+		else if ( m_buffer_queue_in->size() > m_in_queue_spawn_limit_blocks
+			/* && mp_temp_file_manager->CountFreeBuffers() < (int)m_out_queue_spawn_limit_blocks */) {
 
 			// Increase thread count
 			if ( mv_sorter_threads.size() < m_maximum_threads ) {
-				BlockSorterThread<K,V>* new_thread = new BlockSorterThread<K,V>(this->mp_config, this->m_buffer_queue_in, this->m_buffer_queue_out, this->mp_temp_file_manager, this->mq_temp_files, &this->m_status);
+				BlockSorterThread<K,V>* new_thread = new BlockSorterThread<K,V>(this->mp_config, this->m_buffer_queue_in, this->m_buffer_queue_out, this->mq_temp_files, &this->m_status);
 				mv_sorter_threads.push_back(new_thread);
 			}
 		}
@@ -150,25 +157,17 @@ BlockSorter<K,V>::CheckSpawnThreads() {
 template <class K, class V>
 size_t
 BlockSorter<K,V>::BytesInFlight() {
-	return mp_temp_file_manager->BytesInFlight() + m_status.bytes_inflight;
+	return /*mp_temp_file_manager->BytesInFlight() +*/ m_status.bytes_inflight;
 }
 
-/*
-size_t 
-BlockSorter<K,V>::GetBlock(void* buffer) {
-	size_t ret = m_buffer_queue->deq_out(&buffer);
-	return ret;
-}
-*/
 template <class K, class V>
-BlockSorterThread<K,V>::BlockSorterThread(SortReduceTypes::Config<K,V>* config, SortReduceUtils::MutexedQueue<SortReduceTypes::Block>* buffer_queue_in, SortReduceUtils::MutexedQueue<SortReduceTypes::Block>* buffer_queue_out, TempFileManager* file_manager, SortReduceUtils::MutexedQueue<SortReduceTypes::File>* temp_files, SortReduceTypes::ComponentStatus* status) {
+BlockSorterThread<K,V>::BlockSorterThread(SortReduceTypes::Config<K,V>* config, SortReduceUtils::MutexedQueue<SortReduceTypes::Block>* buffer_queue_in, SortReduceUtils::MutexedQueue<SortReduceTypes::Block>* buffer_queue_out, SortReduceUtils::MutexedQueue<SortReduceTypes::File>* temp_files, SortReduceTypes::ComponentStatus* status) {
 	m_exit = false;
 	m_buffer_queue_in = buffer_queue_in;
 	m_buffer_queue_out = buffer_queue_out;
 	mp_config = config;
 
 	m_thread = std::thread(&BlockSorterThread<K,V>::SorterThread, this);
-	mp_file_manager = file_manager;
 	mq_temp_files = temp_files;
 
 	mp_status = status;
@@ -202,7 +201,8 @@ BlockSorterThread<K,V>::SorterThread() {
 		if ( bytes <= 0 ) continue;
 
 		BlockSorterThread<K,V>::SortKV(buffer, bytes);
-		size_t reduced_bytes = SortReduceReducer::ReduceInBuffer<K,V>(mp_config->update, buffer, bytes);
+		//size_t reduced_bytes = SortReduceReducer::ReduceInBuffer<K,V>(mp_config->update, buffer, bytes);
+		size_t reduced_bytes = bytes;
 
 		/*
 		uint32_t last_key = 0;
