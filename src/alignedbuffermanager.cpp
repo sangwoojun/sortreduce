@@ -1,14 +1,19 @@
 #include "alignedbuffermanager.h"
 
-AlignedBufferManager*
-AlignedBufferManager::mp_instance = NULL;
+AlignedBufferManager* AlignedBufferManager::mp_instance[ALIGNED_INSTANCE_COUNT] = {NULL,NULL,NULL,NULL};
 
 AlignedBufferManager*
-AlignedBufferManager::GetInstance() {
-	if ( mp_instance == NULL ) {
-		mp_instance = new AlignedBufferManager();
+AlignedBufferManager::GetInstance(int idx) {
+	if ( idx >= ALIGNED_INSTANCE_COUNT ) {
+		fprintf(stderr, "AlignedBufferManager::GetInstance idx too large %d\n", idx );
+		return NULL;
 	}
-	return mp_instance;
+
+	if ( mp_instance[idx] == NULL ) {
+		mp_instance[idx] = new AlignedBufferManager();
+		mp_instance[idx]->m_instance_idx = idx;
+	}
+	return mp_instance[idx];
 }
 
 void 
@@ -35,6 +40,11 @@ AlignedBufferManager::GetBuffer() {
 	SortReduceTypes::Block ret;
 	ret.valid = false;
 
+	if ( m_init_done == false ) {
+		fprintf( stderr, "AlignedBufferManager Init not called! %s:%d\n", __FILE__, __LINE__ );
+		return ret;
+	}
+
 	m_mutex.lock();
 	
 	if ( !mq_free_buffers.empty() ) {
@@ -46,11 +56,21 @@ AlignedBufferManager::GetBuffer() {
 		ret.managed = true;
 		ret.managed_idx = idx;
 		ret.valid = true;
+		//printf( "Buffer granted %d -> %d\n", m_instance_idx, mq_free_buffers.size() );
 	}
 	
 	m_mutex.unlock();
 
 	return ret;
+}
+
+void 
+AlignedBufferManager::ReturnBuffer(SortReduceTypes::Block block) {
+	m_mutex.lock();
+	//TODO check duplicates!
+	mq_free_buffers.push(block.managed_idx);
+	//printf( "Buffer returned %d -> %d\n", m_instance_idx, mq_free_buffers.size() );
+	m_mutex.unlock();
 }
 
 SortReduceTypes::Block 
@@ -64,6 +84,7 @@ AlignedBufferManager::WaitBuffer() {
 	
 	return ret;
 }
+
 
 
 AlignedBufferManager::AlignedBufferManager() {

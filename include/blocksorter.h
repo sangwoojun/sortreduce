@@ -51,7 +51,7 @@ private:
 template <class K, class V>
 class BlockSorter {
 public:
-	BlockSorter(SortReduceTypes::Config<K,V>* config, SortReduceUtils::MutexedQueue<SortReduceTypes::File>* temp_files, std::string temp_path, size_t buffer_size, int buffer_count, int max_threads);
+	BlockSorter(SortReduceTypes::Config<K,V>* config, SortReduceUtils::MutexedQueue<SortReduceTypes::File>* temp_files, std::string temp_path, int max_threads);
 	~BlockSorter();
 
 	void PutBlock(void* buffer, size_t bytes, bool last);
@@ -63,6 +63,9 @@ public:
 
 	// Does not include managed blocks
 	size_t BytesInFlight();
+
+	// Does include managed blocks
+	int BlocksInFlight() { return m_blocks_inflight; };
 
 
 	SortReduceTypes::Block GetFreeManagedBlock();
@@ -80,15 +83,17 @@ private:
 	SortReduceUtils::MutexedQueue<SortReduceTypes::Block>* m_buffer_queue_in;
 	SortReduceUtils::MutexedQueue<SortReduceTypes::Block>* m_buffer_queue_out;
 
+	std::atomic<int> m_blocks_inflight;
+
 	//TempFileManager* mp_temp_file_manager;
 	SortReduceUtils::MutexedQueue<SortReduceTypes::File>* mq_temp_files;
 
+	/*
 	size_t m_buffer_size;
 	int m_buffer_count;
-
-
 	void** mpp_managed_buffers;
 	std::stack<int> ms_free_managed_buffers;
+	*/
 
 	SortReduceTypes::ComponentStatus m_status;
 

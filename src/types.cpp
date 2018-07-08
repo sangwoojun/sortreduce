@@ -42,7 +42,9 @@ SortReduceTypes::Config<K,V>::SetUpdateFunction(uint64_t (*update64)(uint64_t,ui
 */
 
 SortReduceTypes::Status::Status() {
-	this->done = false;
+	this->done_input = false;
+	this->done_inmem = false;
+	this->done_external = false;
 }
 
 template class SortReduceTypes::Config<uint32_t,uint32_t>;

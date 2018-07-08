@@ -19,21 +19,24 @@ namespace SortReduceReducer {
 	template <class K, class V>
 	class StreamMergeReducer {
 	public:
-		virtual ~StreamMergeReducer() = 0;
+		virtual ~StreamMergeReducer() {};
 		virtual void PutBlock(SortReduceTypes::Block block) = 0;
 		virtual void PutFile(SortReduceTypes::File* file) = 0;
 		virtual void Start() = 0;
 		virtual bool IsDone() = 0;
+		virtual SortReduceTypes::File* GetOutFile() = 0;
 
 		typedef struct {
 			K key;
 			V val;
 		} KvPair;
 	
-	private:
+	//private:
 		static K DecodeKey(void* buffer, size_t offset);
 		static V DecodeVal(void* buffer, size_t offset);
 		static void EncodeKvp(void* buffer, size_t offset, K key, V val);
+		static void EncodeKey(void* buffer, size_t offset, K key);
+		static void EncodeVal(void* buffer, size_t offset, V val);
 	};
 
 	template <class K, class V>
@@ -46,6 +49,7 @@ namespace SortReduceReducer {
 		void PutFile(SortReduceTypes::File* file);
 		void Start();
 		bool IsDone() { return m_done; };
+		SortReduceTypes::File* GetOutFile() {return m_out_file; };
 	private:
 		typedef struct {
 			bool from_file;
@@ -59,9 +63,8 @@ namespace SortReduceReducer {
 		} KvPairSrc;
 		class CompareKv {
 		public:
-			bool operator() (KvPairSrc a, KvPairSrc b)
-			{
-				return (a.key < b.key);
+			bool operator() (KvPairSrc a, KvPairSrc b) {
+				return (a.key > b.key); // This ordering feels wrong, but this is correct
 			}
 		};
 		std::priority_queue<KvPairSrc,std::vector<KvPairSrc>, CompareKv> m_priority_queue;

@@ -15,12 +15,14 @@
 #include <libaio.h>
 
 #include "types.h"
+#include "alignedbuffermanager.h"
 
 #define AIO_DEPTH 128
 
 class TempFileManager {
 public:
 	TempFileManager(std::string path);
+	~TempFileManager();
 
 	//SortReduceTypes::File* CreateFile(void* buffer, size_t bytes, size_t valid_bytes, bool free_buffer_after_done);
 	SortReduceTypes::File* CreateEmptyFile();
@@ -53,9 +55,8 @@ private:
 
 		void* buffer;
 		size_t bytes;
-		//TODO If free_buffer_after_done is not set, return to buffer pool
-		bool free_buffer_after_done;
 
+		SortReduceTypes::Block block;
 		SortReduceTypes::File* file = NULL;
 	} IocbArgs;
 	IocbArgs ma_request_args[AIO_DEPTH];

@@ -30,6 +30,12 @@ namespace SortReduceTypes {
 		int fd;
 		size_t bytes;
 	};
+	class CompareFileSize {
+	public:
+		bool operator() (File* a, File* b) {
+			return (a->bytes < b->bytes);
+		}
+	};
 
 	typedef struct {
 		std::atomic<size_t> bytes_inflight;
@@ -64,7 +70,9 @@ namespace SortReduceTypes {
 	class Status {
 	public:
 		Status();
-		bool done;
+		bool done_input;
+		bool done_inmem;
+		bool done_external;
 	private:
 	};
 }

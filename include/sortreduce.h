@@ -54,8 +54,13 @@ private:
 	SortReduceUtils::MutexedQueue<SortReduceTypes::File>* mq_temp_files;
 
 	bool m_done_input;
+	bool m_done_inmem;
+	bool m_done_external;
 
-	std::vector<SortReduceReducer::StreamMergeReducer<K,V>*> mv_stream_mergers;
+	std::vector<SortReduceReducer::StreamMergeReducer<K,V>*> mv_stream_mergers_from_mem;
+	std::vector<SortReduceReducer::StreamMergeReducer<K,V>*> mv_stream_mergers_from_storage;
+
+	std::priority_queue<SortReduceTypes::File*,std::vector<SortReduceTypes::File*>, SortReduceTypes::CompareFileSize> m_file_priority_queue;
 
 };
 

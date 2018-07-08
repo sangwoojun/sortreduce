@@ -18,6 +18,9 @@ TempFileManager::TempFileManager(std::string path ) {
 	}
 }
 
+TempFileManager::~TempFileManager() {
+	io_destroy(m_io_ctx);
+}
 
 /*
 SortReduceTypes::File*
@@ -101,10 +104,11 @@ TempFileManager::Write(SortReduceTypes::File* file, SortReduceTypes::Block block
 	bool ret = false;
 
 	int fd = file->fd;
-
+	
 	CheckDone();
 	
 	m_mutex.lock();
+	
 
 	if ( !mq_free_bufs.empty() ) {
 		int idx = mq_free_bufs.front();
@@ -118,7 +122,8 @@ TempFileManager::Write(SortReduceTypes::File* file, SortReduceTypes::Block block
 		args->buffer = block.buffer;
 		args->write = true;
 		args->busy = true;
-		args->free_buffer_after_done = !block.managed;
+		//args->free_buffer_after_done = !block.managed;
+		args->block = block;
 		args->file = file;
 
 		ma_iocb[idx].data = args;
@@ -133,6 +138,8 @@ TempFileManager::Write(SortReduceTypes::File* file, SortReduceTypes::Block block
 	}
 
 	m_mutex.unlock();
+	
+	//printf( "Writing file %lu size %lu -- %lu success: %s\n", offset, block.valid_bytes, mq_free_bufs.size(), ret?"yes":"no" ); fflush(stdout);
 
 	return ret;
 }
@@ -163,7 +170,6 @@ TempFileManager::Read(SortReduceTypes::File* file, off_t offset, size_t bytes, v
 		args->buffer = buffer;
 		args->write = false;
 		args->busy = true;
-		args->free_buffer_after_done = false; //Not important
 		args->file = file;
 
 		ma_iocb[idx].data = args;
@@ -207,15 +213,20 @@ TempFileManager::ReadStatus(bool clear) {
 void
 TempFileManager::CheckDone() {
 	int num_events = io_getevents(m_io_ctx, 0, AIO_DEPTH, ma_events, NULL);
+
 	m_mutex.lock();
 	for ( int i = 0; i < num_events; i++ ) {
 		struct io_event event = ma_events[i];
 		IocbArgs* arg = (IocbArgs*)event.data;
 		arg->busy = false;
-
+			
 		if ( arg->write ) {
 			mq_free_bufs.push(arg->idx);
-			if ( arg->free_buffer_after_done ) {
+
+			if ( arg->block.managed ) {
+				AlignedBufferManager* buffer_manager = AlignedBufferManager::GetInstance(1);
+				buffer_manager->ReturnBuffer(arg->block);
+			} else {
 				free(arg->buffer);
 				m_writing_bytes -= arg->bytes;
 			}
@@ -226,6 +237,7 @@ TempFileManager::CheckDone() {
 		int next = mq_read_order_idx.front();
 		if ( ma_request_args[next].busy == false ) {
 			mq_free_bufs.push(next);
+			//printf( "Read done!\n" ); fflush(stdout);
 			mq_read_order_idx.pop();
 			m_read_ready_count ++;
 		} else {

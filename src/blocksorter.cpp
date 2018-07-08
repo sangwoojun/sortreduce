@@ -10,11 +10,10 @@ Use valid_bytes to determine how to sort <- come non-local fixing required
 **/
 
 template <class K, class V>
-BlockSorter<K,V>::BlockSorter(SortReduceTypes::Config<K,V>* config, SortReduceUtils::MutexedQueue<SortReduceTypes::File>* temp_files, std::string temp_path, size_t buffer_size, int buffer_count, int max_threads) {
+BlockSorter<K,V>::BlockSorter(SortReduceTypes::Config<K,V>* config, SortReduceUtils::MutexedQueue<SortReduceTypes::File>* temp_files, std::string temp_path, int max_threads) {
 
-	AlignedBufferManager* buffer_manager = AlignedBufferManager::GetInstance();
-	buffer_manager->Init(1024*1024*4, 128); //FIXME fixed to 4 MB
 
+	this->m_blocks_inflight = 0;
 	this->m_buffer_queue_in = new SortReduceUtils::MutexedQueue<SortReduceTypes::Block>();
 	this->m_buffer_queue_out = new SortReduceUtils::MutexedQueue<SortReduceTypes::Block>();
 
@@ -30,6 +29,7 @@ BlockSorter<K,V>::BlockSorter(SortReduceTypes::Config<K,V>* config, SortReduceUt
 	//this->mp_temp_file_manager = new TempFileManager(temp_path);
 	this->mq_temp_files = temp_files;
 
+/*
 	this->m_buffer_size = buffer_size;
 	this->m_buffer_count = buffer_count;
 	mpp_managed_buffers = (void**)malloc(sizeof(void**)*buffer_count);
@@ -41,14 +41,17 @@ BlockSorter<K,V>::BlockSorter(SortReduceTypes::Config<K,V>* config, SortReduceUt
 		// so that first pop gets 0, not buffer_count-1
 		ms_free_managed_buffers.push(buffer_count-1-i);
 	}
+*/
 }
 
 template <class K, class V>
 BlockSorter<K,V>::~BlockSorter() {
+/*
 	for ( int i = 0; i < m_buffer_count; i++ ) {
 		if ( mpp_managed_buffers[i] != NULL ) free(mpp_managed_buffers[i]);
 	}
 	free (mpp_managed_buffers);
+*/
 
 }
 
@@ -63,18 +66,27 @@ BlockSorter<K,V>::PutBlock(void* buffer, size_t bytes, bool last) {
 	b.last = last;
 	m_buffer_queue_in->push(b);
 
+	m_blocks_inflight ++;
+
 	m_status.bytes_inflight += bytes;
 }
 
 template <class K, class V>
 SortReduceTypes::Block
 BlockSorter<K,V>::GetBlock() {
+	m_blocks_inflight --;
+
 	return m_buffer_queue_out->get();
 }
 
 template <class K, class V>
 SortReduceTypes::Block
 BlockSorter<K,V>::GetFreeManagedBlock() {
+	AlignedBufferManager* managed_buffers = AlignedBufferManager::GetInstance(0);
+
+	return managed_buffers->GetBuffer();
+
+/*
 	SortReduceTypes::Block b;
 
 	if ( ms_free_managed_buffers.empty() ) {
@@ -89,20 +101,25 @@ BlockSorter<K,V>::GetFreeManagedBlock() {
 		b.buffer = mpp_managed_buffers[idx];
 		b.bytes = m_buffer_size;
 		b.managed = true;
+		b.managed_idx = idx;
 		b.valid = true;
 	}
 
 	return b;
+*/
 }
 
 template <class K, class V>
 void 
 BlockSorter<K,V>::PutManagedBlock(SortReduceTypes::Block block) {
 	if ( block.managed == false || block.managed_idx < 0 ) {
+		fprintf(stderr, "PutManagedBlock with non-managed block!\n" );
 		return;
 	}
 	
 	m_buffer_queue_in->push(block);
+
+	m_blocks_inflight ++;
 }
 
 /**
@@ -111,9 +128,6 @@ BlockSorter<K,V>::PutManagedBlock(SortReduceTypes::Block block) {
 template <class K, class V>
 void
 BlockSorter<K,V>::CheckSpawnThreads() {
-	//TODO move this to a separate function?
-	//mp_temp_file_manager->CheckDone();
-
 	timespec cur_time;
 	clock_gettime(CLOCK_REALTIME, &cur_time);
 	double diff_secs = SortReduceUtils::TimespecDiffSec(m_last_thread_check_time, cur_time);
@@ -191,35 +205,35 @@ BlockSorterThread<K,V>::CompareKV(KvPair a, KvPair b) {
 template <class K, class V>
 void
 BlockSorterThread<K,V>::SorterThread() {
-	printf( "BlockSorterThread created!\n" );
+	printf( "BlockSorterThread created!\n" ); fflush(stdout);
 	while ( !m_exit ) {
 		SortReduceTypes::Block block;
 		block = m_buffer_queue_in->get();
-		size_t bytes = block.bytes;
+		size_t valid_bytes = block.valid_bytes;
 		void* buffer = block.buffer;
 
-		if ( bytes <= 0 ) continue;
+		if ( valid_bytes <= 0 ) continue;
 
-		BlockSorterThread<K,V>::SortKV(buffer, bytes);
+		//printf( "Begin sort block of size %ld\n", valid_bytes );
+		BlockSorterThread<K,V>::SortKV(buffer, valid_bytes);
+		//printf( "Done sort block of size %ld -- \n", valid_bytes  );
 		//size_t reduced_bytes = SortReduceReducer::ReduceInBuffer<K,V>(mp_config->update, buffer, bytes);
-		size_t reduced_bytes = bytes;
 
-		/*
-		uint32_t last_key = 0;
-		for ( int i = 0; i < 1024*1024; i++ ) {
-			uint32_t cur = ((uint32_t*)buffer)[i*2];
-			if ( cur < last_key ) {
-				printf( "Wrong order after sort %x %x\n", last_key, cur );
+/*
+		K last_key = 0;
+		for ( int i = 0; i < mp_config->buffer_size/sizeof(KvPair); i++ ) {
+			KvPair cur = ((KvPair*)buffer)[i];
+			if ( cur.key < last_key ) {
+				printf( "Wrong order after sort %x %x\n", last_key, cur.key );
 			}
-			last_key = cur;
+			last_key = cur.key;
 		}
-		*/
+*/
 
 		// non-managed buffers are freed after writing to file
 		if ( !block.managed ) {
-			mp_status->bytes_inflight -= bytes;
+			mp_status->bytes_inflight -= valid_bytes;
 		}
-		block.valid_bytes = reduced_bytes;
 		m_buffer_queue_out->push(block);
 
 		//SortReduceTypes::File new_file = mp_file_manager->CreateFile(buffer, bytes,reduced_bytes, !managed);

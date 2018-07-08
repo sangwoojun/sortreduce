@@ -11,15 +11,20 @@
 
 #include "types.h"
 
+
+#define ALIGNED_INSTANCE_COUNT 4
+
 class AlignedBufferManager {
 public:
-	static AlignedBufferManager* GetInstance();
+	static AlignedBufferManager* GetInstance(int idx);
 	void Init(size_t buffer_size, int buffer_count);
 	SortReduceTypes::Block GetBuffer();
 	SortReduceTypes::Block WaitBuffer();
+	void ReturnBuffer(SortReduceTypes::Block block);
 
 private:
-	static AlignedBufferManager* mp_instance;
+	static AlignedBufferManager* mp_instance[ALIGNED_INSTANCE_COUNT];
+	int m_instance_idx;
 	AlignedBufferManager();
 
 	size_t m_buffer_size;
@@ -29,6 +34,7 @@ private:
 	void** mpp_buffers;
 
 	std::mutex m_mutex;
+
 
 	bool m_init_done = false;
 };
