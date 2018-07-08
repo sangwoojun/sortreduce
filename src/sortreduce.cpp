@@ -156,7 +156,7 @@ SortReduce<K,V>::ManagerThread() {
 		}
 
 		size_t sorted_blocks_cnt = mp_block_sorter->GetBlockCount();
-		if ( sorted_blocks_cnt >= 16 && mv_stream_mergers_from_mem.size() < 8 ) { //FIXME
+		if ( ((m_done_input && sorted_blocks_cnt>1) || sorted_blocks_cnt >= 16) && mv_stream_mergers_from_mem.size() < 8 ) { //FIXME
 			SortReduceReducer::StreamMergeReducer<K,V>* merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory);
 			int to_sort = sorted_blocks_cnt;// (sorted_blocks_cnt > 64)?64:sorted_blocks_cnt; //TODO
 			
@@ -178,6 +178,10 @@ SortReduce<K,V>::ManagerThread() {
 				SortReduceTypes::File* reduced_file = reducer->GetOutFile();
 				m_file_priority_queue.push(reduced_file);
 				printf( "Pushed sort-reduced file -> %lu\n", m_file_priority_queue.size() ); fflush(stdout);
+
+				size_t fsize = lseek(reduced_file->fd, 0, SEEK_END);
+				printf( "File size %lx %lx\n", fsize, reduced_file->bytes );
+				fflush(stdout);
 
 				mv_stream_mergers_from_mem.erase(mv_stream_mergers_from_mem.begin() + i);
 				delete reducer;

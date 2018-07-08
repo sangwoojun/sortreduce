@@ -156,10 +156,9 @@ SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::WorkerThread() {
 			SortReduceTypes::File* file = mv_input_sources[i].file;
 			SortReduceTypes::Block block = buffer_manager->WaitBuffer();
 
-			printf( "Block %ld %d\n",block.bytes,block.managed_idx ); fflush(stdout);
+			//printf( "Block %ld %d\n",block.bytes,block.managed_idx ); fflush(stdout);
 
 			mp_temp_file_manager->Read(file, file_offset[i], block.bytes, block.buffer);
-			file_offset[i] += block.bytes;
 			reads_inflight[i] ++;
 			total_reads_inflight ++;
 
@@ -169,6 +168,8 @@ SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::WorkerThread() {
 				block.valid_bytes = file->bytes - file_offset[i];
 				file_eof[i] = true;
 			}
+
+			file_offset[i] += block.bytes;
 
 			read_request_order.push(std::make_tuple(i,block));
 		} else {
@@ -333,6 +334,7 @@ SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::WorkerThread() {
 				}
 
 				read_request_order.push(std::make_tuple(src,block));
+				printf("Sent read requests\n");fflush(stdout);
 			}
 
 			size_t debt = read_offset[src] + kv_bytes - block.valid_bytes;

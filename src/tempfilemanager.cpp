@@ -110,12 +110,18 @@ TempFileManager::Write(SortReduceTypes::File* file, SortReduceTypes::Block block
 	m_mutex.lock();
 	
 
+	size_t bytes = block.valid_bytes;
 	if ( !mq_free_bufs.empty() ) {
 		int idx = mq_free_bufs.front();
 		mq_free_bufs.pop();
+		
+		size_t frag = bytes & 0x1ff;
+		if ( frag != 0 ) {
+			bytes = bytes - frag + 0x200;
+		}
 
 		memset(&ma_iocb[idx], 0, sizeof(ma_iocb[idx]));
-		io_prep_pwrite(&ma_iocb[idx], fd, block.buffer, block.valid_bytes, offset);
+		io_prep_pwrite(&ma_iocb[idx], fd, block.buffer, bytes, offset);
 
 		IocbArgs* args = &ma_request_args[idx];
 		args->bytes = block.valid_bytes;
@@ -139,7 +145,7 @@ TempFileManager::Write(SortReduceTypes::File* file, SortReduceTypes::Block block
 
 	m_mutex.unlock();
 	
-	//printf( "Writing file %lu size %lu -- %lu success: %s\n", offset, block.valid_bytes, mq_free_bufs.size(), ret?"yes":"no" ); fflush(stdout);
+	//printf( "Writing file %lx size %lx (%lx) -- %lu success: %s\n", offset, block.valid_bytes, bytes, mq_free_bufs.size(), ret?"yes":"no" ); fflush(stdout);
 
 	return ret;
 }
@@ -161,6 +167,13 @@ TempFileManager::Read(SortReduceTypes::File* file, off_t offset, size_t bytes, v
 	if ( !mq_free_bufs.empty() ) {
 		int idx = mq_free_bufs.front();
 		mq_free_bufs.pop();
+
+
+		size_t frag = bytes & 0x1ff;
+		if ( frag != 0 ) {
+			bytes = bytes-frag + 0x200;
+		}
+
 
 		memset(&ma_iocb[idx], 0, sizeof(ma_iocb[idx]));
 		io_prep_pread(&ma_iocb[idx], fd, buffer, bytes, offset);
@@ -223,6 +236,10 @@ TempFileManager::CheckDone() {
 			
 		if ( arg->write ) {
 			mq_free_bufs.push(arg->idx);
+			if ( arg->file != NULL ) arg->file->bytes += arg->bytes;
+			else {
+				printf( "Write used without file argument!\n" ); fflush(stdout);
+			}
 
 			if ( arg->block.managed ) {
 				AlignedBufferManager* buffer_manager = AlignedBufferManager::GetInstance(1);
@@ -238,7 +255,7 @@ TempFileManager::CheckDone() {
 		int next = mq_read_order_idx.front();
 		if ( ma_request_args[next].busy == false ) {
 			mq_free_bufs.push(next);
-			printf( "Read done!\n" ); fflush(stdout);
+			//printf( "Read done!\n" ); fflush(stdout);
 			mq_read_order_idx.pop();
 			m_read_ready_count ++;
 		} else {
