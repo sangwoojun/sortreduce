@@ -73,6 +73,7 @@ namespace SortReduceTypes {
 		bool done_input;
 		bool done_inmem;
 		bool done_external;
+		File* done_file;
 	private:
 	};
 }

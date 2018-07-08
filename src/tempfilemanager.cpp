@@ -178,6 +178,7 @@ TempFileManager::Read(SortReduceTypes::File* file, off_t offset, size_t bytes, v
 		int ret_count = io_submit(m_io_ctx, 1, &iocbs);
 		if ( ret_count > 0 ) {
 			ret = idx;
+			mq_read_order_idx.push(idx);
 		} else {
 			mq_free_bufs.push(idx);
 		}
@@ -237,7 +238,7 @@ TempFileManager::CheckDone() {
 		int next = mq_read_order_idx.front();
 		if ( ma_request_args[next].busy == false ) {
 			mq_free_bufs.push(next);
-			//printf( "Read done!\n" ); fflush(stdout);
+			printf( "Read done!\n" ); fflush(stdout);
 			mq_read_order_idx.pop();
 			m_read_ready_count ++;
 		} else {

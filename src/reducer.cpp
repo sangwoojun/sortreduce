@@ -106,7 +106,7 @@ SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::PutFile(SortReduceTyp
 	}
 
 	DataSource source;
-	source.from_file = false;
+	source.from_file = true;
 	source.block.valid = false;
 	source.file = file;
 	mv_input_sources.push_back(source);
@@ -127,7 +127,7 @@ template <class K, class V>
 void
 SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::WorkerThread() {
 
-	const int file_reads_inflight_target = 2;
+	const int file_reads_inflight_target = 4;
 	const size_t kv_bytes = sizeof(K)+sizeof(V);
 	const int source_count = mv_input_sources.size();
 
@@ -155,6 +155,8 @@ SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::WorkerThread() {
 		
 			SortReduceTypes::File* file = mv_input_sources[i].file;
 			SortReduceTypes::Block block = buffer_manager->WaitBuffer();
+
+			printf( "Block %ld %d\n",block.bytes,block.managed_idx ); fflush(stdout);
 
 			mp_temp_file_manager->Read(file, file_offset[i], block.bytes, block.buffer);
 			file_offset[i] += block.bytes;
@@ -310,6 +312,84 @@ SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::WorkerThread() {
 
 			read_offset[src] += kv_bytes;
 		} else if ( mv_input_sources[src].from_file ) {
+			while ( !file_eof[src] && ready_blocks[src].size() + reads_inflight[src] < file_reads_inflight_target ) {
+				SortReduceTypes::File* file = mv_input_sources[src].file;
+				SortReduceTypes::Block block = buffer_manager->GetBuffer();
+				while (!block.valid) {
+					mp_temp_file_manager->CheckDone();
+					block = buffer_manager->GetBuffer();
+				}
+
+				mp_temp_file_manager->Read(file, file_offset[src], block.bytes, block.buffer);
+				file_offset[src] += block.bytes;
+				reads_inflight[src] ++;
+				total_reads_inflight ++;
+
+				if ( block.bytes + file_offset[src] <= file->bytes ) {
+					block.valid_bytes = block.bytes;
+				} else {
+					block.valid_bytes = file->bytes - file_offset[src];
+					file_eof[src] = true;
+				}
+
+				read_request_order.push(std::make_tuple(src,block));
+			}
+
+			size_t debt = read_offset[src] + kv_bytes - block.valid_bytes;
+			size_t available = kv_bytes - debt;
+			K key;
+			V val;
+	
+			while (ready_blocks[src].size() < 2 && reads_inflight[src] > 0 ) {
+				int read_done = mp_temp_file_manager->ReadStatus(true);
+				total_reads_inflight -= read_done;
+
+				for ( int i = 0; i < read_done; i++ ) {
+					std::tuple<int,SortReduceTypes::Block> req = read_request_order.front();
+					read_request_order.pop();
+					int dst = std::get<0>(req);
+					SortReduceTypes::Block block = std::get<1>(req);
+
+					reads_inflight[dst] --;
+
+					ready_blocks[dst].push(block);
+				}
+
+				if ( total_reads_inflight < 0 ) {
+					fprintf(stderr, "Total_reads_inflight is negative! %d %s:%d\n", total_reads_inflight, __FILE__, __LINE__ );
+				}
+			}
+
+			if ( ready_blocks[src].size() > 1 ) { // If not, we're done!
+				if ( available >= sizeof(K) ) {
+					// cut within V
+					key = StreamMergeReducer<K,V>::DecodeKey(block.buffer, read_offset[src]);
+					read_offset[src] += sizeof(K);
+					memcpy(&val, ((uint8_t*)block.buffer+read_offset[src]), available-sizeof(K));
+					// deq, or wait until 
+					if ( ready_blocks[src].size() <= 1 ) {
+						fprintf(stderr, "ready_blocks[%d] should have data! %s:%d\n", src, __FILE__, __LINE__ );
+					} 
+					ready_blocks[src].pop();
+					SortReduceTypes::Block block = ready_blocks[src].front();
+					memcpy(((uint8_t*)&val)+available-sizeof(K), block.buffer, debt);
+					read_offset[src] = debt;
+				} else {
+					// cut within K
+					if ( ready_blocks[src].size() <= 1 ) {
+						fprintf(stderr, "ready_blocks[%d] should have data! %s:%d\n", src, __FILE__, __LINE__ );
+					
+					memcpy(&key, ((uint8_t*)block.buffer+read_offset[src]), available);
+					ready_blocks[src].pop();
+					SortReduceTypes::Block block = ready_blocks[src].front();
+
+					memcpy(((uint8_t*)&key)+available, block.buffer, sizeof(K)-available);
+					read_offset[src] = sizeof(K)-available;
+					val = StreamMergeReducer<K,V>::DecodeVal(block.buffer, read_offset[src]);
+					read_offset[src] += sizeof(V);
+					} 
+				}
+			}
 		} else {
 			// If from in-memory block, there is no more!
 			SortReduceTypes::Block block = mv_input_sources[src].block;
@@ -394,91 +474,3 @@ template size_t SortReduceReducer::ReduceInBuffer<uint64_t, uint64_t>(uint64_t (
 
 
 
-
-
-/**
-
-		} else if ( mv_input_sources[src].from_file && ( reads_inflight[src] > 0 || ready_blocks[src].size() > 1 ) ) {
-			size_t debt = read_offset[src] + kv_bytes - block.valid_bytes;
-			size_t available = kv_bytes - debt;
-			K key;
-			V val;
-	
-			while (ready_blocks[src].size() < 2 && reads_inflight[src] > 0 ) {
-				int read_done = mp_temp_file_manager->ReadStatus(true);
-				total_reads_inflight -= read_done;
-
-				for ( int i = 0; i < read_done; i++ ) {
-					std::tuple<int,SortReduceTypes::Block> req = read_request_order.front();
-					read_request_order.pop();
-					int dst = std::get<0>(req);
-					SortReduceTypes::Block block = std::get<1>(req);
-
-					reads_inflight[dst] --;
-
-					ready_blocks[dst].push(block);
-				}
-
-				if ( total_reads_inflight < 0 ) {
-					fprintf(stderr, "Total_reads_inflight is negative! %d %s:%d\n", total_reads_inflight, __FILE__, __LINE__ );
-				}
-			}
-
-			if ( mv_input_sources[src].from_file ) {
-				if ( available >= sizeof(K) ) {
-					// cut within V
-					key = StreamMergeReducer<K,V>::DecodeKey(block.buffer, read_offset[src]);
-					read_offset[src] += sizeof(K);
-					memcpy(&val, ((uint8_t*)block.buffer+read_offset[src]), available-sizeof(K));
-					// deq, or wait until 
-					if ( ready_blocks[src].size() <= 1 ) {
-						fprintf(stderr, "ready_blocks[%d] should have data! %s:%d\n", src, __FILE__, __LINE__ );
-					} 
-					ready_blocks[src].pop();
-					SortReduceTypes::Block block = ready_blocks[src].front();
-					memcpy(((uint8_t*)&val)+available-sizeof(K), block.buffer, debt);
-					read_offset[src] = debt;
-				} else {
-					// cut within K
-					if ( ready_blocks[src].size() <= 1 ) {
-						fprintf(stderr, "ready_blocks[%d] should have data! %s:%d\n", src, __FILE__, __LINE__ );
-					
-					memcpy(&key, ((uint8_t*)block.buffer+read_offset[src]), available);
-					ready_blocks[src].pop();
-					SortReduceTypes::Block block = ready_blocks[src].front();
-
-					memcpy(((uint8_t*)&key)+available, block.buffer, sizeof(K)-available);
-					read_offset[src] = sizeof(K)-available;
-					val = StreamMergeReducer<K,V>::DecodeVal(block.buffer, read_offset[src]);
-					read_offset[src] += sizeof(V);
-					} 
-				}
-			}
-		}
-
-**/
-
-
-
-
-/**
-		if ( mv_input_sources[src].from_file && !file_eof[src] && reads_inflight[src] < file_reads_inflight_target ) {
-			SortReduceTypes::File* file = mv_input_sources[src].file;
-			SortReduceTypes::Block block = buffer_manager->WaitBuffer();
-
-			mp_temp_file_manager->Read(file, file_offset[src], block.bytes, block.buffer);
-			file_offset[src] += block.bytes;
-			reads_inflight[src] ++;
-			total_reads_inflight ++;
-
-			if ( block.bytes + file_offset[src] <= file->bytes ) {
-				block.valid_bytes = block.bytes;
-			} else {
-				block.valid_bytes = file->bytes - file_offset[src];
-				file_eof[src] = true;
-			}
-
-			read_request_order.push(std::make_tuple(src,block));
-		}
-
-**/

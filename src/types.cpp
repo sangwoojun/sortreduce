@@ -45,6 +45,7 @@ SortReduceTypes::Status::Status() {
 	this->done_input = false;
 	this->done_inmem = false;
 	this->done_external = false;
+	this->done_file = NULL;
 }
 
 template class SortReduceTypes::Config<uint32_t,uint32_t>;

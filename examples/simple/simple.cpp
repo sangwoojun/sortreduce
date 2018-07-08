@@ -22,11 +22,11 @@ int main(int argc, char** argv) {
 	conf->SetUpdateFunction(&update_function);
 	//conf->SetMaxBytesInFlight(1024*1024*1024); //1GB
 	//conf->SetManagedBufferSize(1024*1024*32, 64); // 2 GB
-	conf->SetManagedBufferSize(1024*1024*2, 256);
+	conf->SetManagedBufferSize(1024*1024, 64);
 	
 	SortReduce<uint32_t,uint32_t>* sr = new SortReduce<uint32_t,uint32_t>(conf);
 
-	for ( uint32_t i = 0; i < (1024*1024*1024/sizeof(uint32_t)/2)/8; i++ ) { //  128MB 
+	for ( uint32_t i = 0; i < (1024*1024*1024/sizeof(uint32_t)/2); i++ ) { //  1 GB
 	//for ( uint32_t i = 0; i < (1024*1024*1024/sizeof(uint32_t)/2)*8; i++ ) { //  8 GB
 		while (!sr->Update(rand(), (1<<16)|1, false));
 	}
@@ -41,6 +41,8 @@ int main(int argc, char** argv) {
 		printf( "%s %s %s\n", status.done_input?"yes":"no", status.done_inmem?"yes":"no", status.done_external?"yes":"no" );
 		fflush(stdout);
 	}
+
+	printf( "All done!\n" ); fflush(stdout);
 	/*
 
 	uint32_t* input_buffer = (uint32_t*)aligned_alloc(512,1024*1024*32); //32MB

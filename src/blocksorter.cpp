@@ -205,7 +205,7 @@ BlockSorterThread<K,V>::CompareKV(KvPair a, KvPair b) {
 template <class K, class V>
 void
 BlockSorterThread<K,V>::SorterThread() {
-	printf( "BlockSorterThread created!\n" ); fflush(stdout);
+	//printf( "BlockSorterThread created!\n" ); fflush(stdout);
 	while ( !m_exit ) {
 		SortReduceTypes::Block block;
 		block = m_buffer_queue_in->get();
