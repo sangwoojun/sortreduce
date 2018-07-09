@@ -145,7 +145,7 @@ SortReduce<K,V>::ManagerThread() {
 
 		// if GetBlock() returns more than ...say 16, spawn a merge-reducer
 		size_t temp_file_count = m_file_priority_queue.size();
-		if ( m_done_inmem && ((m_done_inmem&&temp_file_count>1) || temp_file_count > 16) && mv_stream_mergers_from_storage.empty() ) { //FIXME
+		if ( ((m_done_inmem&&temp_file_count>1) || temp_file_count > 16) && mv_stream_mergers_from_storage.empty() ) { //FIXME
 			SortReduceReducer::StreamMergeReducer<K,V>* merger;
 			if ( m_done_inmem && mv_stream_mergers_from_storage.empty() ) {
 				merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory, m_config->output_filename);
