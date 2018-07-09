@@ -41,6 +41,7 @@ public:
 	//write to m_cur_update_block until it's full
 	//returns false if no remaining buffers
 	bool Update(K key, V val, bool last);
+	std::tuple<K,V,bool> Next();
 private:
 	SortReduceTypes::Block m_cur_update_block;
 	size_t m_cur_update_offset;

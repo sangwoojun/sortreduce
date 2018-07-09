@@ -8,6 +8,8 @@ TempFileManager writes need to have information about <512 bit filesize alignmen
 TempFileManager returns alignedbuffermanager
 Check if StreamReducer's destructor is actually working
 mp_status->bytes_inflight management is wrong for non-managed blocks
+
+Storage->Storage instance should be limited due to input aligned buffer count
 **/
 
 
@@ -118,6 +120,16 @@ SortReduce<K,V>::Update(K key, V val, bool last) {
 }
 
 template <class K, class V>
+std::tuple<K,V,bool>
+SortReduce<K,V>::Next() {
+	if ( mp_file_kv_reader == NULL ) {
+		return std::make_tuple(0,0,false);
+	}
+
+	return mp_file_kv_reader->Next();
+}
+
+template <class K, class V>
 void
 SortReduce<K,V>::ManagerThread() {
 	//printf( "maximum threads: %d\n", config->maximum_threads );
@@ -155,7 +167,7 @@ SortReduce<K,V>::ManagerThread() {
 			if ( reducer->IsDone() ) {
 				SortReduceTypes::File* reduced_file = reducer->GetOutFile();
 				m_file_priority_queue.push(reduced_file);
-				printf( "Storage->Storage Pushed sort-reduced file -> %lu\n", m_file_priority_queue.size() ); fflush(stdout);
+				printf( "Storage->Storage Pushed sort-reduced file ( size %lu ) -> %lu\n", reduced_file->bytes, m_file_priority_queue.size() ); fflush(stdout);
 
 				mv_stream_mergers_from_storage.erase(mv_stream_mergers_from_storage.begin() + i);
 				delete reducer;
@@ -184,7 +196,7 @@ SortReduce<K,V>::ManagerThread() {
 			if ( reducer->IsDone() ) {
 				SortReduceTypes::File* reduced_file = reducer->GetOutFile();
 				m_file_priority_queue.push(reduced_file);
-				printf( "Pushed sort-reduced file -> %lu\n", m_file_priority_queue.size() ); fflush(stdout);
+				printf( "Pushed sort-reduced file ( size %lu ) -> %lu\n", reduced_file->bytes, m_file_priority_queue.size() ); fflush(stdout);
 
 				size_t fsize = lseek(reduced_file->fd, 0, SEEK_END);
 				printf( "File size %lx %lx\n", fsize, reduced_file->bytes );
@@ -204,7 +216,7 @@ SortReduce<K,V>::ManagerThread() {
 		if ( !m_done_external && m_done_input && m_done_inmem && 
 			m_file_priority_queue.size() == 1 && mv_stream_mergers_from_storage.empty() ) {
 
-			mp_file_kv_reader = new SortReduceUtils::FileKvReader<K,V>(m_file_priority_queue.top(), m_config->temporary_directory);
+			mp_file_kv_reader = new SortReduceUtils::FileKvReader<K,V>(m_file_priority_queue.top(), m_config);
 
 			m_done_external = true;
 

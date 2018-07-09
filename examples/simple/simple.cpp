@@ -3,6 +3,7 @@
 
 #include <chrono>
 #include <ctime>
+#include <map>
 
 #include "sortreduce.h"
 #include "types.h"
@@ -18,17 +19,27 @@ uint32_t update_function(uint32_t a, uint32_t b) {
 int main(int argc, char** argv) {
 	srand(time(0));
 
-	SortReduceTypes::Config<uint64_t,uint32_t>* conf = new SortReduceTypes::Config<uint64_t,uint32_t>("./", "output.dat");
+	SortReduceTypes::Config<uint64_t,uint32_t>* conf = new SortReduceTypes::Config<uint64_t,uint32_t>("/mnt/md0/wjun/", "output.dat");
 	conf->SetUpdateFunction(&update_function);
 	conf->SetMaxBytesInFlight(1024*1024*1024); //1GB
 	//conf->SetManagedBufferSize(1024*1024*32, 64); // 2 GB
-	conf->SetManagedBufferSize(1024*1024, 64);
+	conf->SetManagedBufferSize(1024*8, 64);
+
+	std::map<uint64_t,uint32_t> golden_map;
 	
 	SortReduce<uint64_t,uint32_t>* sr = new SortReduce<uint64_t,uint32_t>(conf);
 
-	for ( uint32_t i = 0; i < (1024*1024*1024/sizeof(uint32_t)/2); i++ ) { //  1 GB
+	for ( uint32_t i = 0; i < 1024*1024; i++ ) {
 	//for ( uint32_t i = 0; i < (1024*1024*1024/sizeof(uint32_t)/2)*8; i++ ) { //  8 GB
-		while (!sr->Update((uint64_t)rand(), (1<<16)|1, false));
+		uint64_t key = (uint64_t)rand();
+		while ( !sr->Update(key, (1<<16)|1, false) );
+
+		if ( golden_map.find(key) == golden_map.end() ) {
+			golden_map[key] = (1<<16)|1;
+		} else {
+			uint32_t v = golden_map[key];
+			golden_map[key] = update_function(v,(1<<16)|1);
+		}
 	}
 	while (!sr->Update((uint64_t)rand(), (1<<16)|1, true));
 
@@ -43,6 +54,39 @@ int main(int argc, char** argv) {
 	}
 
 	printf( "All done!\n" ); fflush(stdout);
+
+
+	uint64_t last_key = 0;
+	uint64_t total_count = 0;
+	uint64_t nonexist_count = 0;
+	uint64_t mismatch_count = 0;
+	std::tuple<uint64_t,uint32_t,bool> kvp = sr->Next();
+	while ( std::get<2>(kvp) ) {
+		uint64_t key = std::get<0>(kvp);
+		uint32_t val = std::get<1>(kvp);
+		total_count ++;
+
+		if ( last_key > key ) {
+			printf( "Result key order wrong %lu %lu\n", last_key, key );
+		}
+
+		if ( golden_map.find(key) == golden_map.end() ) {
+			nonexist_count ++;
+		} else {
+			if ( golden_map[key] != val ) {
+				mismatch_count ++;
+			}
+			golden_map.erase(golden_map.find(key));
+		}
+
+		kvp = sr->Next();
+	}
+
+	printf( "total: %lu \nnonexist: %lu \nmismatch: %lu \nleft: %lu\n", total_count, nonexist_count, mismatch_count, golden_map.size() );
+
+
+
+
 	/*
 
 	uint32_t* input_buffer = (uint32_t*)aligned_alloc(512,1024*1024*32); //32MB
