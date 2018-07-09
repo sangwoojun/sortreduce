@@ -18,19 +18,19 @@ uint32_t update_function(uint32_t a, uint32_t b) {
 int main(int argc, char** argv) {
 	srand(time(0));
 
-	SortReduceTypes::Config<uint32_t,uint32_t>* conf = new SortReduceTypes::Config<uint32_t,uint32_t>(0, 0, "./");
+	SortReduceTypes::Config<uint64_t,uint32_t>* conf = new SortReduceTypes::Config<uint64_t,uint32_t>("./", "output.dat");
 	conf->SetUpdateFunction(&update_function);
-	//conf->SetMaxBytesInFlight(1024*1024*1024); //1GB
+	conf->SetMaxBytesInFlight(1024*1024*1024); //1GB
 	//conf->SetManagedBufferSize(1024*1024*32, 64); // 2 GB
 	conf->SetManagedBufferSize(1024*1024, 64);
 	
-	SortReduce<uint32_t,uint32_t>* sr = new SortReduce<uint32_t,uint32_t>(conf);
+	SortReduce<uint64_t,uint32_t>* sr = new SortReduce<uint64_t,uint32_t>(conf);
 
 	for ( uint32_t i = 0; i < (1024*1024*1024/sizeof(uint32_t)/2); i++ ) { //  1 GB
 	//for ( uint32_t i = 0; i < (1024*1024*1024/sizeof(uint32_t)/2)*8; i++ ) { //  8 GB
-		while (!sr->Update(rand(), (1<<16)|1, false));
+		while (!sr->Update((uint64_t)rand(), (1<<16)|1, false));
 	}
-	while (!sr->Update(rand(), (1<<16)|1, true));
+	while (!sr->Update((uint64_t)rand(), (1<<16)|1, true));
 
 	printf( "Input done\n" ); fflush(stdout);
 
@@ -38,7 +38,7 @@ int main(int argc, char** argv) {
 	while ( status.done_external == false ) {
 		sleep(1);
 		status = sr->CheckStatus();
-		printf( "%s %s %s\n", status.done_input?"yes":"no", status.done_inmem?"yes":"no", status.done_external?"yes":"no" );
+		printf( "%s %s %s:%d\n", status.done_input?"yes":"no", status.done_inmem?"yes":"no", status.done_external?"yes":"no", status.external_count );
 		fflush(stdout);
 	}
 

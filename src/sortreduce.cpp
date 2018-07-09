@@ -76,6 +76,7 @@ SortReduce<K,V>::CheckStatus() {
 		}
 		status.done_file = m_file_priority_queue.top();
 	}
+	status.external_count = mv_stream_mergers_from_storage.size();
 	return status;
 }
 
@@ -130,7 +131,13 @@ SortReduce<K,V>::ManagerThread() {
 		// if GetBlock() returns more than ...say 16, spawn a merge-reducer
 		size_t temp_file_count = m_file_priority_queue.size();
 		if ( ((m_done_inmem&&temp_file_count>1) || temp_file_count > 16) && mv_stream_mergers_from_storage.empty() ) { //FIXME
-			SortReduceReducer::StreamMergeReducer<K,V>* merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory);
+			SortReduceReducer::StreamMergeReducer<K,V>* merger;
+			if ( m_done_inmem && mv_stream_mergers_from_storage.empty() ) {
+				merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory, m_config->output_filename);
+			} else {
+				// Invisible temporary file
+				merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory);
+			}
 			int to_sort = temp_file_count;
 			for ( size_t i = 0; i < to_sort; i++ ) {
 				SortReduceTypes::File* file = m_file_priority_queue.top();
@@ -196,6 +203,8 @@ SortReduce<K,V>::ManagerThread() {
 
 		if ( !m_done_external && m_done_input && m_done_inmem && 
 			m_file_priority_queue.size() == 1 && mv_stream_mergers_from_storage.empty() ) {
+
+			mp_file_kv_reader = new SortReduceUtils::FileKvReader<K,V>(m_file_priority_queue.top(), m_config->temporary_directory);
 
 			m_done_external = true;
 

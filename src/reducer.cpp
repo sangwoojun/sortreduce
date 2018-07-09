@@ -62,7 +62,7 @@ SortReduceReducer::ReduceInBuffer(V (*update)(V,V), void* buffer, size_t bytes) 
 }
 
 template <class K, class V>
-SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::StreamMergeReducer_SinglePriority(V (*update)(V,V), std::string temp_directory) {
+SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::StreamMergeReducer_SinglePriority(V (*update)(V,V), std::string temp_directory, std::string filename) {
 	this->m_done = false;
 	this->m_started = false;
 
@@ -70,9 +70,8 @@ SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::StreamMergeReducer_Si
 	this->mp_update = update;
 
 	this->mp_temp_file_manager = new TempFileManager(temp_directory);
-	m_out_file = mp_temp_file_manager->CreateEmptyFile();
-
-
+	
+	m_out_file = mp_temp_file_manager->CreateEmptyFile(filename);
 }
 
 template <class K, class V>
@@ -334,7 +333,7 @@ SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::WorkerThread() {
 				}
 
 				read_request_order.push(std::make_tuple(src,block));
-				printf("Sent read requests\n");fflush(stdout);
+				//printf("Sent read requests\n");fflush(stdout);
 			}
 
 			size_t debt = read_offset[src] + kv_bytes - block.valid_bytes;
@@ -362,7 +361,9 @@ SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::WorkerThread() {
 				}
 			}
 
+			SortReduceTypes::Block cur_block = ready_blocks[src].front();
 			if ( ready_blocks[src].size() > 1 ) { // If not, we're done!
+
 				if ( available >= sizeof(K) ) {
 					// cut within V
 					key = StreamMergeReducer<K,V>::DecodeKey(block.buffer, read_offset[src]);
@@ -391,7 +392,13 @@ SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::WorkerThread() {
 					read_offset[src] += sizeof(V);
 					} 
 				}
+			} else {
+				//TODO close file
+				SortReduceTypes::File* file = mv_input_sources[src].file;
+				mp_temp_file_manager->Close(file->fd);
 			}
+
+			buffer_manager->ReturnBuffer(cur_block);
 		} else {
 			// If from in-memory block, there is no more!
 			SortReduceTypes::Block block = mv_input_sources[src].block;

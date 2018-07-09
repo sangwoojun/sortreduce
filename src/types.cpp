@@ -1,10 +1,9 @@
 #include "types.h"
 
 template <class K, class V>
-SortReduceTypes::Config<K,V>::Config(int file_input, int file_output, std::string temporary_directory) {
-	this->file_input = file_input;
-	this->file_output = file_output;
+SortReduceTypes::Config<K,V>::Config(std::string temporary_directory, std::string output_filename) {
 	this->temporary_directory = temporary_directory;
+	this->output_filename = output_filename;
 
 	this->maximum_threads = 4;
 	this->update = NULL;
@@ -49,3 +48,6 @@ SortReduceTypes::Status::Status() {
 }
 
 template class SortReduceTypes::Config<uint32_t,uint32_t>;
+template class SortReduceTypes::Config<uint32_t,uint64_t>;
+template class SortReduceTypes::Config<uint64_t,uint32_t>;
+template class SortReduceTypes::Config<uint64_t,uint64_t>;

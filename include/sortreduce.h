@@ -19,6 +19,7 @@
 
 #include "alignedbuffermanager.h"
 #include "blocksorter.h"
+#include "filekvreader.h"
 #include "reducer.h"
 #include "types.h"
 #include "utils.h"
@@ -62,6 +63,8 @@ private:
 	std::vector<SortReduceReducer::StreamMergeReducer<K,V>*> mv_stream_mergers_from_storage;
 
 	std::priority_queue<SortReduceTypes::File*,std::vector<SortReduceTypes::File*>, SortReduceTypes::CompareFileSize> m_file_priority_queue;
+
+	SortReduceUtils::FileKvReader<K,V>* mp_file_kv_reader = NULL;
 
 };
 

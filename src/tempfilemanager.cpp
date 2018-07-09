@@ -46,10 +46,16 @@ TempFileManager::CreateFile(void* buffer, size_t bytes, size_t valid_bytes, bool
 */
 
 SortReduceTypes::File*
-TempFileManager::CreateEmptyFile() {
-	printf( "Creating empty file\n" ); fflush(stdout);
+TempFileManager::CreateEmptyFile(std::string filename) {
+	//printf( "Creating empty file\n" ); fflush(stdout);
 
-	int fd = open(m_base_path.c_str(), O_RDWR|O_DIRECT|O_TMPFILE, S_IRUSR|S_IWUSR);
+	int fd = -1;
+	if ( filename == "" ) {
+		fd = open(m_base_path.c_str(), O_RDWR|O_DIRECT|O_TMPFILE, S_IRUSR|S_IWUSR);
+	} else {
+		fd = open((m_base_path+filename).c_str(), O_RDWR|O_DIRECT|O_CREAT, S_IRUSR|S_IWUSR);
+	}
+
 
 	SortReduceTypes::File* ret = new SortReduceTypes::File();
 	ret->fd = fd;

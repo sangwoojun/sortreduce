@@ -45,17 +45,15 @@ namespace SortReduceTypes {
 	template <class K, class V>
 	class Config {
 	public:
-		Config(int file_input, int file_output, std::string temporary_directory);
+		Config(std::string temporary_directory, std::string output_filename = "");
 		void SetUpdateFunction(V (*update)(V,V) );
 		//void SetUpdateFunction(uint64_t (*update64)(uint64_t,uint64_t) );
 		void SetManagedBufferSize(size_t buffer_size, int buffer_count);
 		void SetMaxBytesInFlight(size_t bytes);
 	//private:
 
-		int file_input;
-		int file_output;
-
 		std::string temporary_directory;
+		std::string output_filename;
 
 		int maximum_threads;
 
@@ -73,6 +71,8 @@ namespace SortReduceTypes {
 		bool done_input;
 		bool done_inmem;
 		bool done_external;
+
+		int external_count;
 		File* done_file;
 	private:
 	};
