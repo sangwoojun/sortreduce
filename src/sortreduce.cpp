@@ -20,6 +20,7 @@ SortReduce<K,V>::SortReduce(SortReduceTypes::Config<K,V> *config) {
 	this->m_done_external = false;
 
 	this->m_cur_update_block.valid = false;
+	this->m_cur_update_block.bytes = 0;
 	
 	//Buffers for in-memory sorting
 	AlignedBufferManager* managed_buffers = AlignedBufferManager::GetInstance(0);
@@ -89,9 +90,23 @@ SortReduce<K,V>::Update(K key, V val, bool last) {
 	if ( m_done_input ) return false;
 
 	if ( last ) m_done_input = true;
+	
+	if ( m_cur_update_block.valid == false ) {
+		m_cur_update_block = mp_block_sorter->GetFreeManagedBlock();
+		if ( m_cur_update_block.valid == false ) return false;
+		m_cur_update_offset = 0;
+		//printf( "Got new managed block %s\n", m_cur_update_block.managed?"yes":"no" ); fflush(stdout);
+	}
+	
+	K* cur_key_ptr = (K*)((uint8_t*)m_cur_update_block.buffer + m_cur_update_offset);
+	*cur_key_ptr = key;
+	V* cur_val_ptr = (V*)((uint8_t*)m_cur_update_block.buffer + m_cur_update_offset + sizeof(K));
+	*cur_val_ptr = val;
+	m_cur_update_offset += sizeof(K)+sizeof(V);
 
-	//catches cold updates with no cur_update_block and when cur_update_block is full
-	if ( last || m_cur_update_offset + sizeof(K) + sizeof(V) > m_cur_update_block.bytes ) {
+	//also catches cold updates with no cur_update_block and when cur_update_block is full
+	// sizeof(K)+sizeof(V) because KVsize may not be block size aligned
+	if ( m_cur_update_offset + sizeof(K)+sizeof(V) > m_cur_update_block.bytes ) { 
 		if ( m_cur_update_block.valid ) { // or managed_idx < 0 or bytes = 0
 			m_cur_update_block.valid_bytes  = m_cur_update_offset;
 			if ( last ) m_cur_update_block.last = true;
@@ -101,20 +116,8 @@ SortReduce<K,V>::Update(K key, V val, bool last) {
 			m_cur_update_block.valid = false;
 			m_cur_update_block.bytes = 0;
 		}
-		if ( !last ) {
-			m_cur_update_block = mp_block_sorter->GetFreeManagedBlock();
-			if ( m_cur_update_block.valid == false ) return false;
-			m_cur_update_offset = 0;
-			//printf( "Got new managed block %s\n", m_cur_update_block.managed?"yes":"no" ); fflush(stdout);
-		}
 	}
 
-	K* cur_key_ptr = (K*)((uint8_t*)m_cur_update_block.buffer + m_cur_update_offset);
-	*cur_key_ptr = key;
-	V* cur_val_ptr = (V*)((uint8_t*)m_cur_update_block.buffer + m_cur_update_offset + sizeof(K));
-	*cur_val_ptr = val;
-
-	m_cur_update_offset += sizeof(K)+sizeof(V);
 
 	return true;
 }
@@ -142,7 +145,7 @@ SortReduce<K,V>::ManagerThread() {
 
 		// if GetBlock() returns more than ...say 16, spawn a merge-reducer
 		size_t temp_file_count = m_file_priority_queue.size();
-		if ( ((m_done_inmem&&temp_file_count>1) || temp_file_count > 16) && mv_stream_mergers_from_storage.empty() ) { //FIXME
+		if ( m_done_inmem && ((m_done_inmem&&temp_file_count>1) || temp_file_count > 16) && mv_stream_mergers_from_storage.empty() ) { //FIXME
 			SortReduceReducer::StreamMergeReducer<K,V>* merger;
 			if ( m_done_inmem && mv_stream_mergers_from_storage.empty() ) {
 				merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory, m_config->output_filename);

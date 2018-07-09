@@ -202,6 +202,7 @@ TempFileManager::Read(SortReduceTypes::File* file, off_t offset, size_t bytes, v
 			mq_free_bufs.push(idx);
 		}
 	}
+	//printf( "Reading file %lx size %lx -- %lu success: %d\n", offset, bytes, mq_free_bufs.size(), ret ); fflush(stdout);
 
 	m_mutex.unlock();
 

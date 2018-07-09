@@ -157,7 +157,7 @@ SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::WorkerThread() {
 
 			//printf( "Block %ld %d\n",block.bytes,block.managed_idx ); fflush(stdout);
 
-			mp_temp_file_manager->Read(file, file_offset[i], block.bytes, block.buffer);
+			while ( 0 > mp_temp_file_manager->Read(file, file_offset[i], block.bytes, block.buffer) );
 			reads_inflight[i] ++;
 			total_reads_inflight ++;
 
@@ -293,9 +293,9 @@ SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::WorkerThread() {
 						out_offset = debt;
 					}
 
-					last_key = kvp.key;
-					last_val = kvp.val;
 				}
+				last_key = kvp.key;
+				last_val = kvp.val;
 			}
 		}
 		
@@ -320,7 +320,7 @@ SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::WorkerThread() {
 					block = buffer_manager->GetBuffer();
 				}
 
-				mp_temp_file_manager->Read(file, file_offset[src], block.bytes, block.buffer);
+				while ( 0 > mp_temp_file_manager->Read(file, file_offset[src], block.bytes, block.buffer) );
 				file_offset[src] += block.bytes;
 				reads_inflight[src] ++;
 				total_reads_inflight ++;

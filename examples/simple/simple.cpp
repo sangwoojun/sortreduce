@@ -13,7 +13,11 @@ uint32_t update_function(uint32_t a, uint32_t b) {
 	uint32_t a2 = (a>>16)&0xffff;
 	uint32_t b1 = b & 0xffff;
 	uint32_t b2 = (b>>16)&0xffff;
-	return (a1+b1) | ((a2|b2)<<16);
+	uint32_t ret = ((a1+b1)&0xffff) | (((a2+b2)&0xffff)<<16);
+
+	//printf( "%x %x -> %x\n", a,b,ret );
+	
+	return ret;
 }
 
 int main(int argc, char** argv) {
@@ -31,7 +35,8 @@ int main(int argc, char** argv) {
 
 	for ( uint32_t i = 0; i < 1024*1024; i++ ) {
 	//for ( uint32_t i = 0; i < (1024*1024*1024/sizeof(uint32_t)/2)*8; i++ ) { //  8 GB
-		uint64_t key = (uint64_t)rand();
+		uint64_t key = (uint64_t)(rand()&0xffff);
+		//uint64_t key = 1;
 		while ( !sr->Update(key, (1<<16)|1, false) );
 
 		if ( golden_map.find(key) == golden_map.end() ) {
@@ -41,7 +46,7 @@ int main(int argc, char** argv) {
 			golden_map[key] = update_function(v,(1<<16)|1);
 		}
 	}
-	while (!sr->Update((uint64_t)rand(), (1<<16)|1, true));
+	while (!sr->Update(0,0, true));
 
 	printf( "Input done\n" ); fflush(stdout);
 
@@ -66,15 +71,19 @@ int main(int argc, char** argv) {
 		uint32_t val = std::get<1>(kvp);
 		total_count ++;
 
+		//printf( "%lx %x\n", key, val );
+
 		if ( last_key > key ) {
 			printf( "Result key order wrong %lu %lu\n", last_key, key );
 		}
 
 		if ( golden_map.find(key) == golden_map.end() ) {
 			nonexist_count ++;
+			//printf( "%lu -- \n", key );
 		} else {
 			if ( golden_map[key] != val ) {
 				mismatch_count ++;
+				printf( "%x -- %x\n", golden_map[key], val );
 			}
 			golden_map.erase(golden_map.find(key));
 		}

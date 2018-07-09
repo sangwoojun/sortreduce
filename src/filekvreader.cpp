@@ -13,10 +13,10 @@ SortReduceUtils::FileKvReader<K,V>::FileKvReader(SortReduceTypes::File* file, So
 
 	this->m_offset = 0;
 	this->m_file_size = file->bytes;
-	printf( "Loading file size %lu\n", m_file_size );
+	printf( "Loading file %s size %lu\n", config->output_filename.c_str(), m_file_size );
 
 	// temp
-	this->mp_fp = fopen(config->output_filename.c_str(), "rb");
+	this->mp_fp = fopen((config->temporary_directory+config->output_filename).c_str(), "rb");
 
 }
 
@@ -42,21 +42,17 @@ SortReduceUtils::FileKvReader<K,V>::Seek(size_t idx) {
 template <class K, class V>
 std::tuple<K,V, bool> 
 SortReduceUtils::FileKvReader<K,V>::Next() {
-	std::tuple<K,V,bool> ret = std::make_tuple(0,0,false);
-
-	if ( m_offset >= m_file_size ) return ret;
+	if ( m_offset >= m_file_size ) return std::make_tuple(0,0,false);
 	
-	KvPair kvp;
-	size_t sz = fread(&kvp, sizeof(KvPair), 1, mp_fp);
-	if ( sz > 0 ) {
-		K key = kvp.key;
-		V val = kvp.val;
-		ret = std::make_tuple(key,val,true);
+	K key = 0;
+	V val = 0;
+	fread(&key, sizeof(K), 1, mp_fp);
+	fread(&val, sizeof(V), 1, mp_fp);
+	m_offset += sizeof(K)+sizeof(V);
 
-		m_offset += sizeof(KvPair);
-	}
+	return std::make_tuple(key,val,true);
 
-	return ret;
+	//printf( "!!! %lx %x %lu %lu\n", key, val, sizeof(K), sizeof(V) );
 }
 
 
