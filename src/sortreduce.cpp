@@ -159,6 +159,7 @@ SortReduce<K,V>::ManagerThread() {
 			int to_sort = temp_file_count>128?128:temp_file_count;
 			for ( size_t i = 0; i < to_sort; i++ ) {
 				SortReduceTypes::File* file = m_file_priority_queue.top();
+
 				m_file_priority_queue.pop();
 
 				merger->PutFile(file);

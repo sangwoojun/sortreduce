@@ -33,7 +33,8 @@ namespace SortReduceTypes {
 	class CompareFileSize {
 	public:
 		bool operator() (File* a, File* b) {
-			return (a->bytes < b->bytes);
+			return (a->bytes > b->bytes); // This ordering feels wrong, but this is correct
+
 		}
 	};
 
