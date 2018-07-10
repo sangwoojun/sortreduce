@@ -28,7 +28,7 @@ SortReduce<K,V>::SortReduce(SortReduceTypes::Config<K,V> *config) {
 
 	//Buffers for file I/O
 	AlignedBufferManager* buffer_manager = AlignedBufferManager::GetInstance(1);
-	buffer_manager->Init(1024*1024*4, 256); //FIXME fixed to 4 MB
+	buffer_manager->Init(1024*1024, 1024*4); //FIXME fixed to 1 MB -> 4GB
 	
 
 	this->m_config = config;
@@ -80,6 +80,9 @@ SortReduce<K,V>::CheckStatus() {
 		status.done_file = m_file_priority_queue.top();
 	}
 	status.external_count = mv_stream_mergers_from_storage.size();
+	status.internal_count = mv_stream_mergers_from_mem.size();
+	status.sorted_count = mp_block_sorter->GetBlockCount();
+	status.file_count = m_file_priority_queue.size();
 	return status;
 }
 
@@ -145,7 +148,7 @@ SortReduce<K,V>::ManagerThread() {
 
 		// if GetBlock() returns more than ...say 16, spawn a merge-reducer
 		size_t temp_file_count = m_file_priority_queue.size();
-		if ( ((m_done_inmem&&temp_file_count>1) || temp_file_count > 16) && mv_stream_mergers_from_storage.empty() ) { //FIXME
+		if ( ((m_done_inmem&&temp_file_count>1) || temp_file_count > 16) && mv_stream_mergers_from_storage.size() < 4 ) { //FIXME
 			SortReduceReducer::StreamMergeReducer<K,V>* merger;
 			if ( m_done_inmem && mv_stream_mergers_from_storage.empty() ) {
 				merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory, m_config->output_filename);
@@ -153,7 +156,7 @@ SortReduce<K,V>::ManagerThread() {
 				// Invisible temporary file
 				merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory);
 			}
-			int to_sort = temp_file_count;
+			int to_sort = temp_file_count>128?128:temp_file_count;
 			for ( size_t i = 0; i < to_sort; i++ ) {
 				SortReduceTypes::File* file = m_file_priority_queue.top();
 				m_file_priority_queue.pop();
@@ -162,7 +165,7 @@ SortReduce<K,V>::ManagerThread() {
 				//printf( "%d -- %x %x\n", i, *((uint32_t*)block.buffer),((uint32_t*)block.buffer)[1] );
 			}
 			merger->Start();
-			printf( "Storage->Storage Reducer\n" );fflush(stdout);
+			//printf( "Storage->Storage Reducer\n" );fflush(stdout);
 			mv_stream_mergers_from_storage.push_back(merger);
 		}
 		for ( int i = 0; i < mv_stream_mergers_from_storage.size(); i++ ) {
@@ -170,7 +173,7 @@ SortReduce<K,V>::ManagerThread() {
 			if ( reducer->IsDone() ) {
 				SortReduceTypes::File* reduced_file = reducer->GetOutFile();
 				m_file_priority_queue.push(reduced_file);
-				printf( "Storage->Storage Pushed sort-reduced file ( size %lu ) -> %lu\n", reduced_file->bytes, m_file_priority_queue.size() ); fflush(stdout);
+				//printf( "Storage->Storage Pushed sort-reduced file ( size %lu ) -> %lu\n", reduced_file->bytes, m_file_priority_queue.size() ); fflush(stdout);
 
 				mv_stream_mergers_from_storage.erase(mv_stream_mergers_from_storage.begin() + i);
 				delete reducer;
@@ -178,7 +181,7 @@ SortReduce<K,V>::ManagerThread() {
 		}
 
 		size_t sorted_blocks_cnt = mp_block_sorter->GetBlockCount();
-		if ( ((m_done_input && sorted_blocks_cnt>1) || sorted_blocks_cnt >= 16) && mv_stream_mergers_from_mem.size() < 8 ) { //FIXME
+		if ( ((m_done_input && sorted_blocks_cnt>0) || sorted_blocks_cnt >= 16) && mv_stream_mergers_from_mem.size() < 8 ) { //FIXME
 			SortReduceReducer::StreamMergeReducer<K,V>* merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory);
 			int to_sort = sorted_blocks_cnt;// (sorted_blocks_cnt > 64)?64:sorted_blocks_cnt; //TODO
 			
@@ -199,10 +202,10 @@ SortReduce<K,V>::ManagerThread() {
 			if ( reducer->IsDone() ) {
 				SortReduceTypes::File* reduced_file = reducer->GetOutFile();
 				m_file_priority_queue.push(reduced_file);
-				printf( "Pushed sort-reduced file ( size %lu ) -> %lu\n", reduced_file->bytes, m_file_priority_queue.size() ); fflush(stdout);
+				//printf( "Pushed sort-reduced file ( size %lu ) -> %lu\n", reduced_file->bytes, m_file_priority_queue.size() ); fflush(stdout);
 
-				size_t fsize = lseek(reduced_file->fd, 0, SEEK_END);
-				printf( "File size %lx %lx\n", fsize, reduced_file->bytes );
+				//size_t fsize = lseek(reduced_file->fd, 0, SEEK_END);
+				//printf( "File size %lx %lx\n", fsize, reduced_file->bytes );
 				fflush(stdout);
 
 				mv_stream_mergers_from_mem.erase(mv_stream_mergers_from_mem.begin() + i);

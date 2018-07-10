@@ -9,6 +9,7 @@
 #include "types.h"
 
 uint32_t update_function(uint32_t a, uint32_t b) {
+/*
 	uint32_t a1 = a & 0xffff;
 	uint32_t a2 = (a>>16)&0xffff;
 	uint32_t b1 = b & 0xffff;
@@ -16,7 +17,8 @@ uint32_t update_function(uint32_t a, uint32_t b) {
 	uint32_t ret = ((a1+b1)&0xffff) | (((a2+b2)&0xffff)<<16);
 
 	//printf( "%x %x -> %x\n", a,b,ret );
-	
+*/
+	uint32_t ret = a+b;
 	return ret;
 }
 
@@ -27,23 +29,32 @@ int main(int argc, char** argv) {
 	conf->SetUpdateFunction(&update_function);
 	conf->SetMaxBytesInFlight(1024*1024*1024); //1GB
 	//conf->SetManagedBufferSize(1024*1024*32, 64); // 2 GB
-	conf->SetManagedBufferSize(1024*8, 64);
+	conf->SetManagedBufferSize(1024*1024/4, 64*16*4*4); // 4 GB
 
 	std::map<uint64_t,uint32_t> golden_map;
 	
 	SortReduce<uint64_t,uint32_t>* sr = new SortReduce<uint64_t,uint32_t>(conf);
 
-	for ( uint32_t i = 0; i < 1024*1024; i++ ) {
-	//for ( uint32_t i = 0; i < (1024*1024*1024/sizeof(uint32_t)/2)*8; i++ ) { //  8 GB
+	//for ( uint32_t i = 0; i < 1024*1024*32; i++ ) {
+	for ( uint64_t i = 0; i < (uint64_t)1024*1024*1024*8; i++ ) { //  8*12 GB
 		uint64_t key = (uint64_t)(rand()&0xffff);
 		//uint64_t key = 1;
-		while ( !sr->Update(key, (1<<16)|1, false) );
+		//while ( !sr->Update(key, (1<<16)|1, false) );
+		while ( !sr->Update(key, 1, false) );
 
+/*
 		if ( golden_map.find(key) == golden_map.end() ) {
 			golden_map[key] = (1<<16)|1;
 		} else {
 			uint32_t v = golden_map[key];
 			golden_map[key] = update_function(v,(1<<16)|1);
+		}
+*/
+		if ( golden_map.find(key) == golden_map.end() ) {
+			golden_map[key] = 1;
+		} else {
+			uint32_t v = golden_map[key];
+			golden_map[key] = v+1;
 		}
 	}
 	while (!sr->Update(0,0, true));
@@ -54,7 +65,7 @@ int main(int argc, char** argv) {
 	while ( status.done_external == false ) {
 		sleep(1);
 		status = sr->CheckStatus();
-		printf( "%s %s %s:%d\n", status.done_input?"yes":"no", status.done_inmem?"yes":"no", status.done_external?"yes":"no", status.external_count );
+		printf( "%s %s:%d-%d %s:%d-%d\n", status.done_input?"yes":"no", status.done_inmem?"yes":"no",status.internal_count, status.sorted_count, status.done_external?"yes":"no", status.external_count, status.file_count );
 		fflush(stdout);
 	}
 

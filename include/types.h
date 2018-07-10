@@ -73,6 +73,10 @@ namespace SortReduceTypes {
 		bool done_external;
 
 		int external_count;
+		int internal_count;
+
+		int sorted_count;
+		int file_count;
 		File* done_file;
 	private:
 	};

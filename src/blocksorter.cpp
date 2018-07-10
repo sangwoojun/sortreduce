@@ -131,8 +131,13 @@ BlockSorter<K,V>::CheckSpawnThreads() {
 	timespec cur_time;
 	clock_gettime(CLOCK_REALTIME, &cur_time);
 	double diff_secs = SortReduceUtils::TimespecDiffSec(m_last_thread_check_time, cur_time);
+				
+	if ( mv_sorter_threads.size() < 16 ) {
+		BlockSorterThread<K,V>* new_thread = new BlockSorterThread<K,V>(this->mp_config, this->m_buffer_queue_in, this->m_buffer_queue_out, this->mq_temp_files, &this->m_status);
+		mv_sorter_threads.push_back(new_thread);
+	}
 
-	if ( diff_secs >= 0.2 ) {
+	if ( false && diff_secs >= 0.2 ) { //FIXME
 		m_last_thread_check_time = cur_time;
 
 		// If no threads exist, and input data exists, spawn thread
