@@ -60,11 +60,16 @@ SortReduce<K,V>::PutBlock(void* buffer, size_t bytes, bool last) {
 }
 
 template <class K, class V>
-size_t
-SortReduce<K,V>::GetBlock(void* buffer) {
-	return 0;
+SortReduceTypes::Block
+SortReduce<K,V>::GetFreeManagedBlock() {
+	return mp_block_sorter->GetFreeManagedBlock();
 }
 
+template <class K, class V>
+void 
+SortReduce<K,V>::PutManagedBlock(SortReduceTypes::Block block) {
+	mp_block_sorter->PutManagedBlock(block);
+}
 
 template <class K, class V>
 SortReduceTypes::Status 
@@ -109,7 +114,7 @@ SortReduce<K,V>::Update(K key, V val, bool last) {
 
 	//also catches cold updates with no cur_update_block and when cur_update_block is full
 	// sizeof(K)+sizeof(V) because KVsize may not be block size aligned
-	if ( m_cur_update_offset + sizeof(K)+sizeof(V) > m_cur_update_block.bytes ) { 
+	if ( last || m_cur_update_offset + sizeof(K)+sizeof(V) > m_cur_update_block.bytes ) { 
 		if ( m_cur_update_block.valid ) { // or managed_idx < 0 or bytes = 0
 			m_cur_update_block.valid_bytes  = m_cur_update_offset;
 			if ( last ) m_cur_update_block.last = true;
@@ -133,6 +138,15 @@ SortReduce<K,V>::Next() {
 	}
 
 	return mp_file_kv_reader->Next();
+}
+
+
+template<class K, class V>
+typename SortReduce<K,V>::IoEndpoint*
+SortReduce<K,V>::GetEndpoint() {
+	IoEndpoint* ep = new IoEndpoint(this);
+	mv_endpoints.push_back(ep);
+	return ep;
 }
 
 template <class K, class V>
@@ -182,7 +196,7 @@ SortReduce<K,V>::ManagerThread() {
 		}
 
 		size_t sorted_blocks_cnt = mp_block_sorter->GetBlockCount();
-		if ( ((m_done_input && sorted_blocks_cnt>0) || sorted_blocks_cnt >= 16) && mv_stream_mergers_from_mem.size() < 8 ) { //FIXME
+		if ( ((m_done_input && sorted_blocks_cnt>0) || sorted_blocks_cnt >= 16) && mv_stream_mergers_from_mem.size() < 1 ) { //FIXME
 			SortReduceReducer::StreamMergeReducer<K,V>* merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory);
 			int to_sort = sorted_blocks_cnt;// (sorted_blocks_cnt > 64)?64:sorted_blocks_cnt; //TODO
 			
@@ -233,6 +247,71 @@ SortReduce<K,V>::ManagerThread() {
 
 
 	}
+}
+
+template<class K, class V>
+SortReduce<K,V>::IoEndpoint::IoEndpoint(SortReduce<K,V>* sr) {
+	mp_sortreduce = sr;
+	m_cur_update_block.valid = false;
+	m_cur_update_offset = 0;
+	m_done = false;
+}
+
+template<class K, class V>
+bool
+SortReduce<K,V>::IoEndpoint::Update(K key, V val) {
+	if ( m_done ) return false;
+
+	if ( m_cur_update_block.valid == false ) {
+		m_cur_update_block = mp_sortreduce->GetFreeManagedBlock();
+		if ( m_cur_update_block.valid == false ) return false;
+		m_cur_update_offset = 0;
+		//printf( "Got new managed block %s\n", m_cur_update_block.managed?"yes":"no" ); fflush(stdout);
+	}
+	
+	K* cur_key_ptr = (K*)((uint8_t*)m_cur_update_block.buffer + m_cur_update_offset);
+	*cur_key_ptr = key;
+	V* cur_val_ptr = (V*)((uint8_t*)m_cur_update_block.buffer + m_cur_update_offset + sizeof(K));
+	*cur_val_ptr = val;
+	m_cur_update_offset += sizeof(K)+sizeof(V);
+
+	//also catches cold updates with no cur_update_block and when cur_update_block is full
+	// sizeof(K)+sizeof(V) because KVsize may not be block size aligned
+	if ( m_cur_update_offset + sizeof(K)+sizeof(V) > m_cur_update_block.bytes ) { 
+		if ( m_cur_update_block.valid ) { // or managed_idx < 0 or bytes = 0
+			m_cur_update_block.valid_bytes  = m_cur_update_offset;
+			
+			//printf( "Putting managed block %s\n", m_cur_update_block.managed?"yes":"no" ); fflush(stdout);
+			mp_sortreduce->PutManagedBlock(m_cur_update_block);
+			m_cur_update_block.valid = false;
+			m_cur_update_block.bytes = 0;
+		}
+	}
+
+
+	return true;
+}
+
+template<class K, class V>
+void
+SortReduce<K,V>::IoEndpoint::Finish() {
+	if ( m_cur_update_block.valid &&  m_cur_update_offset > 0 ) {
+		m_cur_update_block.valid_bytes  = m_cur_update_offset;
+		
+		//printf( "Putting managed block %s\n", m_cur_update_block.managed?"yes":"no" ); fflush(stdout);
+		mp_sortreduce->PutManagedBlock(m_cur_update_block);
+		m_cur_update_block.valid = false;
+		m_cur_update_block.bytes = 0;
+	}
+	m_done = true;
+}
+
+template<class K, class V>
+std::tuple<K,V,bool> 
+SortReduce<K,V>::IoEndpoint::Next() {
+	std::tuple<K,V,bool> ret;
+	//return mp_sortreduce->Next(); //TODO blocks
+	return ret; //TODO
 }
 
 

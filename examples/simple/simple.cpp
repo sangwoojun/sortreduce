@@ -29,11 +29,13 @@ int main(int argc, char** argv) {
 	conf->SetUpdateFunction(&update_function);
 	conf->SetMaxBytesInFlight(1024*1024*1024); //1GB
 	//conf->SetManagedBufferSize(1024*1024*32, 64); // 2 GB
-	conf->SetManagedBufferSize(1024*1024/4, 64*16*4*4); // 4 GB
+	conf->SetManagedBufferSize(1024*1024*32*4, 64/2); // 4 GB
 
 	std::map<uint64_t,uint32_t> golden_map;
 	
 	SortReduce<uint64_t,uint32_t>* sr = new SortReduce<uint64_t,uint32_t>(conf);
+
+	printf( "Started!\n" ); fflush(stdout);
 
 	//for ( uint32_t i = 0; i < 1024*1024*32; i++ ) {
 	for ( uint64_t i = 0; i < (uint64_t)1024*1024*1024*8; i++ ) { //  8*12 GB
@@ -50,6 +52,7 @@ int main(int argc, char** argv) {
 			golden_map[key] = update_function(v,(1<<16)|1);
 		}
 */
+
 		if ( golden_map.find(key) == golden_map.end() ) {
 			golden_map[key] = 1;
 		} else {

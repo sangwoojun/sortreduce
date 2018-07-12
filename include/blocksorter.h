@@ -20,7 +20,7 @@
 template <class K, class V>
 class BlockSorterThread {
 public:
-	BlockSorterThread(SortReduceTypes::Config<K,V>* config, SortReduceUtils::MutexedQueue<SortReduceTypes::Block>* buffer_queue_in, SortReduceUtils::MutexedQueue<SortReduceTypes::Block>* buffer_queue_out, SortReduceUtils::MutexedQueue<SortReduceTypes::File>* temp_files, SortReduceTypes::ComponentStatus* status);
+	BlockSorterThread(SortReduceTypes::Config<K,V>* config, SortReduceUtils::MutexedQueue<SortReduceTypes::Block>* buffer_queue_in, SortReduceUtils::MutexedQueue<SortReduceTypes::Block>* buffer_queue_out, SortReduceUtils::MutexedQueue<SortReduceTypes::File>* temp_files, SortReduceTypes::ComponentStatus* status, int thread_idx);
 	void Exit();
 
 	typedef struct __attribute__ ((__packed__)) {K key; V val;} KvPair;
@@ -28,6 +28,7 @@ private:
 	void SorterThread();
 	std::thread m_thread;
 	bool m_exit;
+	int m_thread_idx;
 
 
 	//template <class tKV>

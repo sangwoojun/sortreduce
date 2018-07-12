@@ -27,21 +27,39 @@
 template <class K, class V>
 class SortReduce {
 public:
-
-
-
-public:
 	SortReduce(SortReduceTypes::Config<K,V>* config);
 	~SortReduce();
 	bool PutBlock(void* buffer, size_t bytes, bool last);
-	size_t GetBlock(void* buffer);
-	SortReduceTypes::Status CheckStatus();
+	
+	SortReduceTypes::Block GetFreeManagedBlock();
+	void PutManagedBlock(SortReduceTypes::Block block);
 
 public:
 	//write to m_cur_update_block until it's full
 	//returns false if no remaining buffers
 	bool Update(K key, V val, bool last);
 	std::tuple<K,V,bool> Next();
+	
+	SortReduceTypes::Status CheckStatus();
+
+public:
+	class IoEndpoint {
+	public:
+		IoEndpoint(SortReduce<K,V>* sr);
+		bool Update(K key, V val);
+		void Finish();
+		std::tuple<K,V,bool> Next();
+	private:
+		SortReduce<K,V>* mp_sortreduce;
+	
+		SortReduceTypes::Block m_cur_update_block;
+		size_t m_cur_update_offset;
+
+		bool m_done;
+	};
+	IoEndpoint* GetEndpoint();
+	std::vector<IoEndpoint*> mv_endpoints;
+
 private:
 	SortReduceTypes::Block m_cur_update_block;
 	size_t m_cur_update_offset;

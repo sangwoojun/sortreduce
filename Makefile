@@ -6,7 +6,7 @@ CPPFILES=$(wildcard $(SRCDIR)/*.cpp)
 INCDIR=./include
 INCFILES=$(wildcard $(INCDIR)/*.h)
 
-CFLAGS=-static -Wall -pedantic -lpthread -laio --std=c++11 -pthread -I$(INCDIR) -O3
+CFLAGS=-static -Wall -pedantic -lpthread -laio --std=c++11 -pthread -I$(INCDIR) -O2 -march=native
 
 OUTPUTDIR=./obj
 OBJ=$(patsubst $(SRCDIR)%,$(OUTPUTDIR)%, $(CPPFILES:.cpp=.o))

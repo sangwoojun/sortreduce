@@ -132,11 +132,20 @@ BlockSorter<K,V>::CheckSpawnThreads() {
 	clock_gettime(CLOCK_REALTIME, &cur_time);
 	double diff_secs = SortReduceUtils::TimespecDiffSec(m_last_thread_check_time, cur_time);
 				
-	if ( mv_sorter_threads.size() < 16 ) {
-		BlockSorterThread<K,V>* new_thread = new BlockSorterThread<K,V>(this->mp_config, this->m_buffer_queue_in, this->m_buffer_queue_out, this->mq_temp_files, &this->m_status);
-		mv_sorter_threads.push_back(new_thread);
+	
+	if ( diff_secs >= 1 ) {
+		m_last_thread_check_time = cur_time;
+	
+		printf( "Block sorter threads: %lu\n", mv_sorter_threads.size() );
+	
+		while ( mv_sorter_threads.size() < 8 ) {
+			BlockSorterThread<K,V>* new_thread = new BlockSorterThread<K,V>(this->mp_config, this->m_buffer_queue_in, this->m_buffer_queue_out, this->mq_temp_files, &this->m_status, mv_sorter_threads.size());
+			mv_sorter_threads.push_back(new_thread);
+		}
+
 	}
 
+/*
 	if ( false && diff_secs >= 0.2 ) { //FIXME
 		m_last_thread_check_time = cur_time;
 
@@ -149,7 +158,8 @@ BlockSorter<K,V>::CheckSpawnThreads() {
 			}
 		}
 		else if ( m_buffer_queue_in->size() > m_in_queue_spawn_limit_blocks
-			/* && mp_temp_file_manager->CountFreeBuffers() < (int)m_out_queue_spawn_limit_blocks */) {
+			 //&& mp_temp_file_manager->CountFreeBuffers() < (int)m_out_queue_spawn_limit_blocks 
+			) {
 
 			// Increase thread count
 			if ( mv_sorter_threads.size() < m_maximum_threads ) {
@@ -171,6 +181,7 @@ BlockSorter<K,V>::CheckSpawnThreads() {
 			}
 		}
 	}
+	*/
 }
 
 template <class K, class V>
@@ -180,8 +191,10 @@ BlockSorter<K,V>::BytesInFlight() {
 }
 
 template <class K, class V>
-BlockSorterThread<K,V>::BlockSorterThread(SortReduceTypes::Config<K,V>* config, SortReduceUtils::MutexedQueue<SortReduceTypes::Block>* buffer_queue_in, SortReduceUtils::MutexedQueue<SortReduceTypes::Block>* buffer_queue_out, SortReduceUtils::MutexedQueue<SortReduceTypes::File>* temp_files, SortReduceTypes::ComponentStatus* status) {
+BlockSorterThread<K,V>::BlockSorterThread(SortReduceTypes::Config<K,V>* config, SortReduceUtils::MutexedQueue<SortReduceTypes::Block>* buffer_queue_in, SortReduceUtils::MutexedQueue<SortReduceTypes::Block>* buffer_queue_out, SortReduceUtils::MutexedQueue<SortReduceTypes::File>* temp_files, SortReduceTypes::ComponentStatus* status, int thread_idx) {
 	m_exit = false;
+	m_thread_idx = thread_idx;
+
 	m_buffer_queue_in = buffer_queue_in;
 	m_buffer_queue_out = buffer_queue_out;
 	mp_config = config;
@@ -217,12 +230,23 @@ BlockSorterThread<K,V>::SorterThread() {
 		size_t valid_bytes = block.valid_bytes;
 		void* buffer = block.buffer;
 
-		if ( valid_bytes <= 0 ) continue;
+		if ( valid_bytes <= 0 ) {
+			usleep(100);
+			continue;
+		}
+
+		std::chrono::high_resolution_clock::time_point start, end;
+		start = std::chrono::high_resolution_clock::now();
 
 		//printf( "Begin sort block of size %ld\n", valid_bytes );
 		BlockSorterThread<K,V>::SortKV(buffer, valid_bytes);
 		//printf( "Done sort block of size %ld -- \n", valid_bytes  );
 		//size_t reduced_bytes = SortReduceReducer::ReduceInBuffer<K,V>(mp_config->update, buffer, bytes);
+		end = std::chrono::high_resolution_clock::now();
+		std::chrono::milliseconds duration_milli;
+		duration_milli = std::chrono::duration_cast<std::chrono::milliseconds> (end-start);
+		printf( "%d: Block sorted: %lu ms\n", m_thread_idx, duration_milli.count() );
+		fflush(stdout);
 
 /*
 		K last_key = 0;
