@@ -136,7 +136,7 @@ BlockSorter<K,V>::CheckSpawnThreads() {
 	if ( diff_secs >= 1 ) {
 		m_last_thread_check_time = cur_time;
 	
-		printf( "Block sorter threads: %lu\n", mv_sorter_threads.size() );
+		//printf( "Block sorter threads: %lu\n", mv_sorter_threads.size() );
 	
 		while ( mv_sorter_threads.size() < 8 ) {
 			BlockSorterThread<K,V>* new_thread = new BlockSorterThread<K,V>(this->mp_config, this->m_buffer_queue_in, this->m_buffer_queue_out, this->mq_temp_files, &this->m_status, mv_sorter_threads.size());
@@ -245,8 +245,8 @@ BlockSorterThread<K,V>::SorterThread() {
 		end = std::chrono::high_resolution_clock::now();
 		std::chrono::milliseconds duration_milli;
 		duration_milli = std::chrono::duration_cast<std::chrono::milliseconds> (end-start);
-		printf( "%d: Block sorted: %lu ms\n", m_thread_idx, duration_milli.count() );
-		fflush(stdout);
+		//printf( "%d: Block sorted: %lu ms\n", m_thread_idx, duration_milli.count() );
+		//fflush(stdout);
 
 /*
 		K last_key = 0;

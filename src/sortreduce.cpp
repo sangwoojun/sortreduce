@@ -93,7 +93,7 @@ SortReduce<K,V>::CheckStatus() {
 
 
 template <class K, class V>
-bool
+inline bool
 SortReduce<K,V>::Update(K key, V val, bool last) {
 	if ( m_done_input ) return false;
 
@@ -196,7 +196,7 @@ SortReduce<K,V>::ManagerThread() {
 		}
 
 		size_t sorted_blocks_cnt = mp_block_sorter->GetBlockCount();
-		if ( ((m_done_input && sorted_blocks_cnt>0) || sorted_blocks_cnt >= 16) && mv_stream_mergers_from_mem.size() < 1 ) { //FIXME
+		if ( ((m_done_input && sorted_blocks_cnt>0) || sorted_blocks_cnt >= 16) && mv_stream_mergers_from_mem.size() < 4 ) { //FIXME
 			SortReduceReducer::StreamMergeReducer<K,V>* merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory);
 			int to_sort = sorted_blocks_cnt;// (sorted_blocks_cnt > 64)?64:sorted_blocks_cnt; //TODO
 			
@@ -258,7 +258,7 @@ SortReduce<K,V>::IoEndpoint::IoEndpoint(SortReduce<K,V>* sr) {
 }
 
 template<class K, class V>
-bool
+inline bool
 SortReduce<K,V>::IoEndpoint::Update(K key, V val) {
 	if ( m_done ) return false;
 

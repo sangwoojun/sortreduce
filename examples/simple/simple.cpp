@@ -29,7 +29,7 @@ int main(int argc, char** argv) {
 	conf->SetUpdateFunction(&update_function);
 	conf->SetMaxBytesInFlight(1024*1024*1024); //1GB
 	//conf->SetManagedBufferSize(1024*1024*32, 64); // 2 GB
-	conf->SetManagedBufferSize(1024*1024*32*4, 64/2); // 4 GB
+	conf->SetManagedBufferSize(1024*1024*32, 64); // 4 GB
 
 	std::map<uint64_t,uint32_t> golden_map;
 	
@@ -42,16 +42,9 @@ int main(int argc, char** argv) {
 		uint64_t key = (uint64_t)(rand()&0xffff);
 		//uint64_t key = 1;
 		//while ( !sr->Update(key, (1<<16)|1, false) );
-		while ( !sr->Update(key, 1, false) );
-
-/*
-		if ( golden_map.find(key) == golden_map.end() ) {
-			golden_map[key] = (1<<16)|1;
-		} else {
-			uint32_t v = golden_map[key];
-			golden_map[key] = update_function(v,(1<<16)|1);
+		while ( !sr->Update(key, 1, false) ) {
+			//printf( "!");
 		}
-*/
 
 		if ( golden_map.find(key) == golden_map.end() ) {
 			golden_map[key] = 1;
@@ -59,7 +52,7 @@ int main(int argc, char** argv) {
 			uint32_t v = golden_map[key];
 			golden_map[key] = v+1;
 		}
-	}
+}
 	while (!sr->Update(0,0, true));
 
 	printf( "Input done\n" ); fflush(stdout);
