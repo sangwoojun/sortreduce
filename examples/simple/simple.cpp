@@ -39,7 +39,7 @@ int main(int argc, char** argv) {
 
 	//for ( uint32_t i = 0; i < 1024*1024*32; i++ ) {
 	for ( uint64_t i = 0; i < (uint64_t)1024*1024*1024*8; i++ ) { //  8*12 GB
-		uint64_t key = (uint64_t)(rand()&0xffff);
+		uint64_t key = 1;//(uint64_t)(rand()&0xffff);
 		//uint64_t key = 1;
 		//while ( !sr->Update(key, (1<<16)|1, false) );
 		while ( !sr->Update(key, 1, false) ) {
