@@ -9,30 +9,30 @@ i.e., uint64_t at the beginning for valid bytes
 **/
 
 template <class K, class V>
-K
+inline K
 SortReduceReducer::StreamMergeReducer<K,V>::DecodeKey(void* buffer, size_t offset) {
 	return *(K*)(((uint8_t*)buffer)+offset);
 }
 
 template <class K, class V>
-V
+inline V
 SortReduceReducer::StreamMergeReducer<K,V>::DecodeVal(void* buffer, size_t offset) {
 	return *(V*)(((uint8_t*)buffer)+offset);
 }
 template <class K, class V>
-void
+inline void
 SortReduceReducer::StreamMergeReducer<K,V>::EncodeKvp(void* buffer, size_t offset, K key, V val) {
 	*(K*)(((uint8_t*)buffer)+offset) = key;
 	*(V*)(((uint8_t*)buffer)+offset+sizeof(K)) = val;
 }
 template <class K, class V>
-void 
+inline void 
 SortReduceReducer::StreamMergeReducer<K,V>::EncodeKey(void* buffer, size_t offset, K key) {
 	*(K*)(((uint8_t*)buffer)+offset) = key;
 }
 
 template <class K, class V>
-void 
+inline void 
 SortReduceReducer::StreamMergeReducer<K,V>::EncodeVal(void* buffer, size_t offset, V val) {
 	*(V*)(((uint8_t*)buffer)+offset) = val;
 }

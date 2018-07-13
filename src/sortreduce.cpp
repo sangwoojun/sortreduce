@@ -144,8 +144,13 @@ SortReduce<K,V>::Next() {
 template<class K, class V>
 typename SortReduce<K,V>::IoEndpoint*
 SortReduce<K,V>::GetEndpoint() {
+	m_mutex.lock();
+
 	IoEndpoint* ep = new IoEndpoint(this);
 	mv_endpoints.push_back(ep);
+
+	m_mutex.unlock();
+
 	return ep;
 }
 
@@ -287,7 +292,6 @@ SortReduce<K,V>::IoEndpoint::Update(K key, V val) {
 			m_cur_update_block.bytes = 0;
 		}
 	}
-
 
 	return true;
 }

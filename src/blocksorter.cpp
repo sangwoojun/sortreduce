@@ -211,6 +211,7 @@ BlockSorterThread<K,V>::SortKV(void* buffer, size_t bytes) {
 	KvPair* tbuffer = (KvPair*)buffer;
 	size_t count = bytes/sizeof(KvPair);
 	std::sort(tbuffer, tbuffer+count, BlockSorterThread<K,V>::CompareKV);
+	printf( "Srted!\n" ); fflush(stdout);
 
 }
 

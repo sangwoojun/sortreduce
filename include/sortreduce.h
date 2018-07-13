@@ -16,6 +16,7 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <mutex>
 
 #include "alignedbuffermanager.h"
 #include "blocksorter.h"
@@ -70,6 +71,7 @@ private:
 	BlockSorter<K,V>* mp_block_sorter;
 
 	std::thread manager_thread;
+	std::mutex m_mutex;
 	void ManagerThread();
 
 	SortReduceUtils::MutexedQueue<SortReduceTypes::File>* mq_temp_files;
