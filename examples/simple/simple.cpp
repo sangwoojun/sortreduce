@@ -42,7 +42,7 @@ int main(int argc, char** argv) {
 		uint64_t key = (uint64_t)(rand()&0xffff);
 		//uint64_t key = 1;
 		//while ( !sr->Update(key, (1<<16)|1, false) );
-		while ( !sr->Update(key, 1, false) ) {
+		while ( !sr->Update(key, 1) ) {
 			//printf( "!" );
 		}
 
@@ -52,8 +52,8 @@ int main(int argc, char** argv) {
 			uint32_t v = golden_map[key];
 			golden_map[key] = v+1;
 		}
-}
-	while (!sr->Update(0,0, true));
+	}
+	sr->Finish();
 
 	printf( "Input done\n" ); fflush(stdout);
 

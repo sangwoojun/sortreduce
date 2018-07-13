@@ -38,32 +38,42 @@ public:
 public:
 	//write to m_cur_update_block until it's full
 	//returns false if no remaining buffers
-	bool Update(K key, V val, bool last);
+	bool Update(K key, V val);
+	void Finish();
 	std::tuple<K,V,bool> Next();
 	
 	SortReduceTypes::Status CheckStatus();
 
+	void CheckInputDone();
+
 public:
 	class IoEndpoint {
 	public:
-		IoEndpoint(SortReduce<K,V>* sr);
+		IoEndpoint(SortReduce<K,V>* sr, bool input_only);
 		bool Update(K key, V val);
 		void Finish();
 		std::tuple<K,V,bool> Next();
+
+		bool IsDone() { return m_done; };
 	private:
 		SortReduce<K,V>* mp_sortreduce;
 	
 		SortReduceTypes::Block m_cur_update_block;
 		size_t m_cur_update_offset;
 
+		// Used only for data injection.
+		// Next() does nothing
+		bool m_input_only;
+
 		bool m_done;
 	};
-	IoEndpoint* GetEndpoint();
+	IoEndpoint* GetEndpoint(bool input_only);
 	std::vector<IoEndpoint*> mv_endpoints;
 
 private:
 	SortReduceTypes::Block m_cur_update_block;
 	size_t m_cur_update_offset;
+
 
 private:
 	SortReduceTypes::Config<K,V>* m_config;
@@ -77,6 +87,7 @@ private:
 	SortReduceUtils::MutexedQueue<SortReduceTypes::File>* mq_temp_files;
 
 	bool m_done_input;
+	bool m_done_input_main;
 	bool m_done_inmem;
 	bool m_done_external;
 

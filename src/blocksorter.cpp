@@ -142,7 +142,6 @@ BlockSorter<K,V>::CheckSpawnThreads() {
 			BlockSorterThread<K,V>* new_thread = new BlockSorterThread<K,V>(this->mp_config, this->m_buffer_queue_in, this->m_buffer_queue_out, this->mq_temp_files, &this->m_status, mv_sorter_threads.size());
 			mv_sorter_threads.push_back(new_thread);
 		}
-
 	}
 
 /*
@@ -211,8 +210,6 @@ BlockSorterThread<K,V>::SortKV(void* buffer, size_t bytes) {
 	KvPair* tbuffer = (KvPair*)buffer;
 	size_t count = bytes/sizeof(KvPair);
 	std::sort(tbuffer, tbuffer+count, BlockSorterThread<K,V>::CompareKV);
-	printf( "Srted!\n" ); fflush(stdout);
-
 }
 
 template <class K, class V>

@@ -16,6 +16,7 @@ Storage->Storage instance should be limited due to input aligned buffer count
 template <class K, class V>
 SortReduce<K,V>::SortReduce(SortReduceTypes::Config<K,V> *config) {
 	this->m_done_input = false;
+	this->m_done_input_main = false;
 	this->m_done_inmem = false;
 	this->m_done_external = false;
 
@@ -94,11 +95,9 @@ SortReduce<K,V>::CheckStatus() {
 
 template <class K, class V>
 inline bool
-SortReduce<K,V>::Update(K key, V val, bool last) {
+SortReduce<K,V>::Update(K key, V val) {
 	if ( m_done_input ) return false;
 
-	if ( last ) m_done_input = true;
-	
 	if ( m_cur_update_block.valid == false ) {
 		m_cur_update_block = mp_block_sorter->GetFreeManagedBlock();
 		if ( m_cur_update_block.valid == false ) return false;
@@ -114,10 +113,9 @@ SortReduce<K,V>::Update(K key, V val, bool last) {
 
 	//also catches cold updates with no cur_update_block and when cur_update_block is full
 	// sizeof(K)+sizeof(V) because KVsize may not be block size aligned
-	if ( last || m_cur_update_offset + sizeof(K)+sizeof(V) > m_cur_update_block.bytes ) { 
+	if ( m_cur_update_offset + sizeof(K)+sizeof(V) > m_cur_update_block.bytes ) { 
 		if ( m_cur_update_block.valid ) { // or managed_idx < 0 or bytes = 0
 			m_cur_update_block.valid_bytes  = m_cur_update_offset;
-			if ( last ) m_cur_update_block.last = true;
 			
 			//printf( "Putting managed block %s\n", m_cur_update_block.managed?"yes":"no" ); fflush(stdout);
 			mp_block_sorter->PutManagedBlock(m_cur_update_block);
@@ -131,6 +129,22 @@ SortReduce<K,V>::Update(K key, V val, bool last) {
 }
 
 template <class K, class V>
+void
+SortReduce<K,V>::Finish() {
+	if ( m_cur_update_block.valid &&  m_cur_update_offset > 0 ) {
+		m_cur_update_block.valid_bytes  = m_cur_update_offset;
+		
+		//printf( "Putting managed block %s\n", m_cur_update_block.managed?"yes":"no" ); fflush(stdout);
+		mp_block_sorter->PutManagedBlock(m_cur_update_block);
+		m_cur_update_block.valid = false;
+		m_cur_update_block.bytes = 0;
+	}
+	m_done_input_main = true;
+
+	CheckInputDone();
+}
+
+template <class K, class V>
 std::tuple<K,V,bool>
 SortReduce<K,V>::Next() {
 	if ( mp_file_kv_reader == NULL ) {
@@ -140,13 +154,34 @@ SortReduce<K,V>::Next() {
 	return mp_file_kv_reader->Next();
 }
 
+template <class K, class V>
+void
+SortReduce<K,V>::CheckInputDone() {
+	bool all_done = true;
+	m_mutex.lock();
+
+	int endpoint_count = mv_endpoints.size();
+	for ( int i = 0; i < endpoint_count; i++ ) {
+		if ( mv_endpoints[i]->IsDone() != true ) {
+			all_done = false;
+			break;
+		}
+	}
+
+	m_mutex.unlock();
+
+	if ( !m_done_input_main ) all_done = false;
+
+	m_done_input = all_done;
+}
+
 
 template<class K, class V>
 typename SortReduce<K,V>::IoEndpoint*
-SortReduce<K,V>::GetEndpoint() {
+SortReduce<K,V>::GetEndpoint(bool input_only) {
 	m_mutex.lock();
 
-	IoEndpoint* ep = new IoEndpoint(this);
+	IoEndpoint* ep = new IoEndpoint(this, input_only);
 	mv_endpoints.push_back(ep);
 
 	m_mutex.unlock();
@@ -250,16 +285,16 @@ SortReduce<K,V>::ManagerThread() {
 			break;
 		}
 
-
 	}
 }
 
 template<class K, class V>
-SortReduce<K,V>::IoEndpoint::IoEndpoint(SortReduce<K,V>* sr) {
+SortReduce<K,V>::IoEndpoint::IoEndpoint(SortReduce<K,V>* sr, bool input_only) {
 	mp_sortreduce = sr;
 	m_cur_update_block.valid = false;
 	m_cur_update_offset = 0;
 	m_done = false;
+	m_input_only = input_only;
 }
 
 template<class K, class V>
@@ -308,13 +343,20 @@ SortReduce<K,V>::IoEndpoint::Finish() {
 		m_cur_update_block.bytes = 0;
 	}
 	m_done = true;
+
+	mp_sortreduce->CheckInputDone();
 }
 
 template<class K, class V>
 std::tuple<K,V,bool> 
 SortReduce<K,V>::IoEndpoint::Next() {
 	std::tuple<K,V,bool> ret;
+
 	//return mp_sortreduce->Next(); //TODO blocks
+	if ( m_input_only ) {
+		ret = std::make_tuple(0,0,false);
+		return ret; //TODO
+	}
 	return ret; //TODO
 }
 
