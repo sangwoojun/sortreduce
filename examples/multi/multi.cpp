@@ -9,7 +9,7 @@
 #include "sortreduce.h"
 #include "types.h"
 
-/* inline */ uint32_t update_function(uint32_t a, uint32_t b) {
+inline  uint32_t update_function(uint32_t a, uint32_t b) {
 /*
 	uint32_t a1 = a & 0xffff;
 	uint32_t a2 = (a>>16)&0xffff;
@@ -26,20 +26,22 @@
 template<class K, class V>
 class InputGenerator{
 public:
-	InputGenerator(SortReduce<K,V>* sr, uint64_t count);
+	InputGenerator(SortReduce<K,V>* sr, uint64_t count, unsigned int seed);
 	void WorkerThread();
 
 private:
 	SortReduce<K,V>* mp_sr = NULL;
 	uint64_t mp_count;
 	std::thread m_worker_thread;
+	unsigned int m_random_seed;
 };
 
 template<class K, class V>
-InputGenerator<K,V>::InputGenerator(SortReduce<K,V>* sr, uint64_t count) {
+InputGenerator<K,V>::InputGenerator(SortReduce<K,V>* sr, uint64_t count, unsigned int seed) {
 	mp_sr = sr;
 	mp_count = count;
 	m_worker_thread = std::thread(&InputGenerator::WorkerThread, this);
+	m_random_seed = seed;
 }
 
 template<class K, class V>
@@ -49,11 +51,12 @@ InputGenerator<K,V>::WorkerThread() {
 
 	printf( "Data input thread started\n" ); fflush(stdout);
 
-	unsigned int rand_seed = time(0);
+	unsigned int rand_seed = m_random_seed;
 
 	for ( uint64_t i = 0; i < mp_count; i++ ) {
 		//uint64_t key = 1;
-		uint64_t key = (uint64_t)(rand_r(&rand_seed)&0xffff);
+		//uint64_t key = (uint64_t)(rand_r(&rand_seed));
+		uint64_t key = i;//(uint64_t)(rand_r(&rand_seed));
 		while ( !ep->Update(key, 1) ) {}
 	}
 	ep->Finish();
@@ -74,9 +77,11 @@ int main(int argc, char** argv) {
 	int thread_count = atoi(argv[1]);
 	uint64_t element_count = strtoull(argv[2], NULL, 10);
 
+	printf( "Element count: %lu\n", element_count );
 
 
-	SortReduceTypes::Config<uint64_t,uint32_t>* conf = new SortReduceTypes::Config<uint64_t,uint32_t>("/mnt/md0/wjun/", "output.dat");
+
+	SortReduceTypes::Config<uint64_t,uint32_t>* conf = new SortReduceTypes::Config<uint64_t,uint32_t>("/mnt/md0/wjun/", "output.dat", 16);
 	conf->SetUpdateFunction(&update_function);
 	conf->SetMaxBytesInFlight(1024*1024*1024); //1GB
 	//conf->SetManagedBufferSize(1024*1024*32, 64); // 2 GB
@@ -94,7 +99,7 @@ int main(int argc, char** argv) {
 
 	std::vector<InputGenerator<uint64_t,uint32_t>*> input_generators;
 	for ( int i = 0; i < thread_count; i++ ){
-		InputGenerator<uint64_t,uint32_t>* ig = new InputGenerator<uint64_t, uint32_t>(sr, element_count);
+		InputGenerator<uint64_t,uint32_t>* ig = new InputGenerator<uint64_t, uint32_t>(sr, element_count, rand());
 		input_generators.push_back(ig);
 	}
 
@@ -103,7 +108,8 @@ int main(int argc, char** argv) {
 
 	//for ( uint32_t i = 0; i < 1024*1024*128; i++ ) {
 	for ( uint64_t i = 0; i < element_count; i++ ) { //  8*12 GB
-		uint64_t key = (uint64_t)(rand()&0xffff);
+		//uint64_t key = (uint64_t)(rand()&0xffff);
+		uint64_t key = (uint64_t)(rand());
 		//uint64_t key = 1;
 		//while ( !sr->Update(key, (1<<16)|1, false) );
 		while ( !sr->Update(key, 1) ) {

@@ -116,7 +116,7 @@ void
 SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::Start() {
 	m_started = true;
 
-	printf( "StreamMergeReducer_SinglePriority started with %lu inputs\n", mv_input_sources.size() ); fflush(stdout);
+	//printf( "StreamMergeReducer_SinglePriority started with %lu inputs\n", mv_input_sources.size() ); fflush(stdout);
 
 	m_worker_thread = std::thread(&StreamMergeReducer_SinglePriority<K,V>::WorkerThread,this);
 }
@@ -460,7 +460,7 @@ SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::WorkerThread() {
 
 	while (mp_temp_file_manager->CountInFlight() > 0 ) mp_temp_file_manager->CheckDone();
 
-	printf( "Reducer done!\n" ); fflush(stdout);
+	//printf( "Reducer done!\n" ); fflush(stdout);
 
 	m_done = true;
 }

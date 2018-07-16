@@ -56,11 +56,15 @@ public:
 	~BlockSorter();
 
 	void PutBlock(void* buffer, size_t bytes, bool last);
-	SortReduceTypes::Block GetBlock();
-	size_t GetBlockCount() { return m_buffer_queue_out->size(); }
+	SortReduceTypes::Block GetOutBlock();
+	size_t GetOutBlockCount() { return m_buffer_queue_out->size(); }
+	size_t GetInBlockCount() { return m_buffer_queue_in->size(); }
+	size_t GetThreadCount() { return mv_sorter_threads.size(); };
 
 	//size_t GetBlock(void* buffer);
 	void CheckSpawnThreads();
+	void SpawnThread();
+	void KillThread();
 
 	// Does not include managed blocks
 	size_t BytesInFlight();

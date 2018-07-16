@@ -73,6 +73,17 @@ AlignedBufferManager::ReturnBuffer(SortReduceTypes::Block block) {
 	m_mutex.unlock();
 }
 
+int
+AlignedBufferManager::GetFreeCount() {
+	m_mutex.lock();
+
+	int ret = mq_free_buffers.size();
+
+	m_mutex.unlock();
+
+	return ret;
+}
+
 SortReduceTypes::Block 
 AlignedBufferManager::WaitBuffer() {
 	SortReduceTypes::Block ret;

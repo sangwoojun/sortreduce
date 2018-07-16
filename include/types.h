@@ -46,7 +46,7 @@ namespace SortReduceTypes {
 	template <class K, class V>
 	class Config {
 	public:
-		Config(std::string temporary_directory, std::string output_filename = "");
+		Config(std::string temporary_directory, std::string output_filename = "", int max_threads = -1);
 		void SetUpdateFunction(V (*update)(V,V) );
 		//void SetUpdateFunction(uint64_t (*update64)(uint64_t,uint64_t) );
 		void SetManagedBufferSize(size_t buffer_size, int buffer_count);

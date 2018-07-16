@@ -29,7 +29,7 @@ SortReduce<K,V>::SortReduce(SortReduceTypes::Config<K,V> *config) {
 
 	//Buffers for file I/O
 	AlignedBufferManager* buffer_manager = AlignedBufferManager::GetInstance(1);
-	buffer_manager->Init(1024*1024, 1024*4); //FIXME fixed to 1 MB -> 4GB
+	buffer_manager->Init(1024*256, 1024*4); //FIXME fixed to 4 GB
 	
 
 	this->m_config = config;
@@ -39,7 +39,11 @@ SortReduce<K,V>::SortReduce(SortReduceTypes::Config<K,V> *config) {
 	}
 	mq_temp_files = new SortReduceUtils::MutexedQueue<SortReduceTypes::File>();
 
-	mp_block_sorter = new BlockSorter<K,V>(config, mq_temp_files, config->temporary_directory, 8); //FIXME thread count
+	m_maximum_threads = config->maximum_threads;
+	// 1 for the manager threads, one for the reducer
+	int block_sorter_maximum_threads = config->maximum_threads - 2;
+
+	mp_block_sorter = new BlockSorter<K,V>(config, mq_temp_files, config->temporary_directory, block_sorter_maximum_threads);
 
 	manager_thread = std::thread(&SortReduce<K,V>::ManagerThread, this);
 }
@@ -87,7 +91,7 @@ SortReduce<K,V>::CheckStatus() {
 	}
 	status.external_count = mv_stream_mergers_from_storage.size();
 	status.internal_count = mv_stream_mergers_from_mem.size();
-	status.sorted_count = mp_block_sorter->GetBlockCount();
+	status.sorted_count = mp_block_sorter->GetOutBlockCount();
 	status.file_count = m_file_priority_queue.size();
 	return status;
 }
@@ -194,15 +198,79 @@ void
 SortReduce<K,V>::ManagerThread() {
 	//printf( "maximum threads: %d\n", config->maximum_threads );
 
+	const size_t reducer_from_mem_fan_in = 16;
+	int reducer_from_mem_max_count = 1;
+
+	std::chrono::high_resolution_clock::time_point last_time;
+	std::chrono::milliseconds duration_milli;
+
+	last_time = std::chrono::high_resolution_clock::now();
+
 	while (true) {
 		//sleep(1);
-		if ( !m_done_inmem ) mp_block_sorter->CheckSpawnThreads();
+		//if ( !m_done_inmem ) mp_block_sorter->CheckSpawnThreads();
+	
+		std::chrono::high_resolution_clock::time_point now;
+		now = std::chrono::high_resolution_clock::now();
 
-		// TODO if m_done_input and managed blocks are all back, mark m_done_inmem
+		duration_milli = std::chrono::duration_cast<std::chrono::milliseconds> (now-last_time);
 
-		// if GetBlock() returns more than ...say 16, spawn a merge-reducer
+		if ( !m_done_inmem && duration_milli.count() > 500 ) {
+			last_time = now;
+			AlignedBufferManager* buffer_manager = AlignedBufferManager::GetInstance(0);
+			int free_cnt = buffer_manager->GetFreeCount();
+
+			if ( free_cnt == 0 ) {
+				size_t in_block_count = mp_block_sorter->GetInBlockCount();
+				size_t out_block_count = mp_block_sorter->GetOutBlockCount();
+				size_t block_sorter_thread_count = mp_block_sorter->GetThreadCount();
+				size_t reducer_from_mem_threads = mv_stream_mergers_from_mem.size();
+				size_t reducer_from_storage_threads = mv_stream_mergers_from_storage.size();
+
+				int threads_available = m_maximum_threads - 1 - reducer_from_mem_threads - reducer_from_storage_threads;
+
+				if ( block_sorter_thread_count*2 < in_block_count ) {
+					// If backed up more than there are threads*2
+					// Bottleneck is the block sorter
+
+					if ( threads_available > 0 ) {
+						mp_block_sorter->SpawnThread();
+					} else {
+						if ( reducer_from_mem_max_count > 1 ) {
+							reducer_from_mem_max_count --;
+							printf( "reducer_from_mem_max_count %d\n", reducer_from_mem_max_count ); fflush(stdout);
+						} else {
+							printf( "No more reducers to kill\n" );
+						}
+					}
+				} 
+				if ( reducer_from_mem_fan_in*2 < out_block_count ) {
+					// If output backed up more than fan in*2
+					// Bottleneck is the from-mem reducer
+					
+					if ( threads_available > 0 ) {
+						reducer_from_mem_max_count ++;
+						printf( "reducer_from_mem_max_count %d\n", reducer_from_mem_max_count ); fflush(stdout);
+					} else {
+						// delete sorter thread
+						// reducer_from_mem_max_count can be increased next
+						if ( block_sorter_thread_count > 1 ) {
+							mp_block_sorter->KillThread();
+						} else {
+							printf( "No more block sorters to kill\n" );
+						}
+					}
+				}
+			}
+
+
+			// TODO check if input is bottleneck
+		}
+
+		// if GetOutBlock() returns more than ...say 16, spawn a merge-reducer
 		size_t temp_file_count = m_file_priority_queue.size();
-		if ( ((m_done_inmem&&temp_file_count>1) || temp_file_count > 16) && mv_stream_mergers_from_storage.size() < 4 ) { //FIXME
+		if ( m_done_inmem && ((m_done_inmem&&temp_file_count>1) || temp_file_count > 16) && mv_stream_mergers_from_storage.size() < m_maximum_threads ) { //FIXME
+
 			SortReduceReducer::StreamMergeReducer<K,V>* merger;
 			if ( m_done_inmem && mv_stream_mergers_from_storage.empty() ) {
 				merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory, m_config->output_filename);
@@ -210,7 +278,8 @@ SortReduce<K,V>::ManagerThread() {
 				// Invisible temporary file
 				merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory);
 			}
-			int to_sort = temp_file_count>128?128:temp_file_count;
+
+			int to_sort = temp_file_count>64?64:temp_file_count;
 			for ( size_t i = 0; i < to_sort; i++ ) {
 				SortReduceTypes::File* file = m_file_priority_queue.top();
 
@@ -223,6 +292,7 @@ SortReduce<K,V>::ManagerThread() {
 			//printf( "Storage->Storage Reducer\n" );fflush(stdout);
 			mv_stream_mergers_from_storage.push_back(merger);
 		}
+
 		for ( int i = 0; i < mv_stream_mergers_from_storage.size(); i++ ) {
 			SortReduceReducer::StreamMergeReducer<K,V>* reducer = mv_stream_mergers_from_storage[i];
 			if ( reducer->IsDone() ) {
@@ -235,13 +305,13 @@ SortReduce<K,V>::ManagerThread() {
 			}
 		}
 
-		size_t sorted_blocks_cnt = mp_block_sorter->GetBlockCount();
-		if ( ((m_done_input && sorted_blocks_cnt>0) || sorted_blocks_cnt >= 16) && mv_stream_mergers_from_mem.size() < 4 ) { //FIXME
+		size_t sorted_blocks_cnt = mp_block_sorter->GetOutBlockCount();
+		if ( ((m_done_input && sorted_blocks_cnt>0) || sorted_blocks_cnt >= 16) && mv_stream_mergers_from_mem.size() < reducer_from_mem_max_count ) {
 			SortReduceReducer::StreamMergeReducer<K,V>* merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory);
-			int to_sort = sorted_blocks_cnt;// (sorted_blocks_cnt > 64)?64:sorted_blocks_cnt; //TODO
+			int to_sort = (sorted_blocks_cnt > 64)?64:sorted_blocks_cnt; //TODO
 			
 			for ( size_t i = 0; i < to_sort; i++ ) {
-				SortReduceTypes::Block block = mp_block_sorter->GetBlock();
+				SortReduceTypes::Block block = mp_block_sorter->GetOutBlock();
 				block.last = true;
 				merger->PutBlock(block);
 				//printf( "%d -- %x %x\n", i, *((uint32_t*)block.buffer),((uint32_t*)block.buffer)[1] );
@@ -272,6 +342,7 @@ SortReduce<K,V>::ManagerThread() {
 			&& mv_stream_mergers_from_mem.empty() ) {
 			m_done_inmem = true;
 			printf( "Im-memory sort done!\n" ); fflush(stdout);
+			//TODO delete mp_block_sorter
 		}
 
 		if ( !m_done_external && m_done_input && m_done_inmem && 

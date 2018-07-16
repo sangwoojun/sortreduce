@@ -17,6 +17,7 @@
 #include <thread>
 #include <vector>
 #include <mutex>
+#include <chrono>
 
 #include "alignedbuffermanager.h"
 #include "blocksorter.h"
@@ -83,6 +84,8 @@ private:
 	std::thread manager_thread;
 	std::mutex m_mutex;
 	void ManagerThread();
+
+	int m_maximum_threads;
 
 	SortReduceUtils::MutexedQueue<SortReduceTypes::File>* mq_temp_files;
 

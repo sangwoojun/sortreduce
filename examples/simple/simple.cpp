@@ -25,7 +25,7 @@ uint32_t update_function(uint32_t a, uint32_t b) {
 int main(int argc, char** argv) {
 	srand(time(0));
 
-	SortReduceTypes::Config<uint64_t,uint32_t>* conf = new SortReduceTypes::Config<uint64_t,uint32_t>("/mnt/md0/wjun/", "output.dat");
+	SortReduceTypes::Config<uint64_t,uint32_t>* conf = new SortReduceTypes::Config<uint64_t,uint32_t>("/mnt/md0/wjun/", "output.dat", 16);
 	conf->SetUpdateFunction(&update_function);
 	conf->SetMaxBytesInFlight(1024*1024*1024); //1GB
 	//conf->SetManagedBufferSize(1024*1024*32, 64); // 2 GB

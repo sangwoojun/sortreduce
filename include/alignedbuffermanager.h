@@ -22,6 +22,8 @@ public:
 	SortReduceTypes::Block WaitBuffer();
 	void ReturnBuffer(SortReduceTypes::Block block);
 
+	int GetFreeCount();
+
 private:
 	static AlignedBufferManager* mp_instance[ALIGNED_INSTANCE_COUNT];
 	int m_instance_idx;

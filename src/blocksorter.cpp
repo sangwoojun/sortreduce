@@ -28,6 +28,9 @@ BlockSorter<K,V>::BlockSorter(SortReduceTypes::Config<K,V>* config, SortReduceUt
 	this->m_out_queue_spawn_limit_blocks = 4;
 	//this->mp_temp_file_manager = new TempFileManager(temp_path);
 	this->mq_temp_files = temp_files;
+	
+	BlockSorterThread<K,V>* new_thread = new BlockSorterThread<K,V>(this->mp_config, this->m_buffer_queue_in, this->m_buffer_queue_out, this->mq_temp_files, &this->m_status, mv_sorter_threads.size());
+	mv_sorter_threads.push_back(new_thread);
 
 /*
 	this->m_buffer_size = buffer_size;
@@ -73,7 +76,7 @@ BlockSorter<K,V>::PutBlock(void* buffer, size_t bytes, bool last) {
 
 template <class K, class V>
 SortReduceTypes::Block
-BlockSorter<K,V>::GetBlock() {
+BlockSorter<K,V>::GetOutBlock() {
 	m_blocks_inflight --;
 
 	return m_buffer_queue_out->get();
@@ -121,6 +124,25 @@ BlockSorter<K,V>::PutManagedBlock(SortReduceTypes::Block block) {
 
 	m_blocks_inflight ++;
 }
+template <class K, class V>
+void
+BlockSorter<K,V>::SpawnThread() {
+	BlockSorterThread<K,V>* new_thread = new BlockSorterThread<K,V>(this->mp_config, this->m_buffer_queue_in, this->m_buffer_queue_out, this->mq_temp_files, &this->m_status, mv_sorter_threads.size());
+	mv_sorter_threads.push_back(new_thread);
+
+	printf( "BlockSorter thread spawned! %lu\n", mv_sorter_threads.size() ); fflush(stdout);
+}
+
+template <class K, class V>
+void
+BlockSorter<K,V>::KillThread() {
+	if ( mv_sorter_threads.size() > 1 ) {
+		mv_sorter_threads[mv_sorter_threads.size()-1]->Exit();
+		mv_sorter_threads.pop_back();
+	}
+	
+	printf( "BlockSorter thread killed! %lu\n", mv_sorter_threads.size() ); fflush(stdout);
+}
 
 /**
 	Should be called by manager thread
@@ -128,11 +150,14 @@ BlockSorter<K,V>::PutManagedBlock(SortReduceTypes::Block block) {
 template <class K, class V>
 void
 BlockSorter<K,V>::CheckSpawnThreads() {
+/*
 	timespec cur_time;
 	clock_gettime(CLOCK_REALTIME, &cur_time);
 	double diff_secs = SortReduceUtils::TimespecDiffSec(m_last_thread_check_time, cur_time);
-				
-	
+*/
+
+
+/*
 	if ( diff_secs >= 1 ) {
 		m_last_thread_check_time = cur_time;
 	
@@ -143,9 +168,10 @@ BlockSorter<K,V>::CheckSpawnThreads() {
 			mv_sorter_threads.push_back(new_thread);
 		}
 	}
+*/
 
 /*
-	if ( false && diff_secs >= 0.2 ) { //FIXME
+	if ( diff_secs >= 0.2 ) {
 		m_last_thread_check_time = cur_time;
 
 		// If no threads exist, and input data exists, spawn thread
@@ -180,7 +206,8 @@ BlockSorter<K,V>::CheckSpawnThreads() {
 			}
 		}
 	}
-	*/
+*/
+
 }
 
 template <class K, class V>
