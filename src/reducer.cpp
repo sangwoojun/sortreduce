@@ -250,6 +250,12 @@ SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::WorkerThread() {
 				if ( last_key > kvp.key ) {
 					printf( "StreamMergeReducer_SinglePriority order wrong! %lx %lx\n", (uint64_t)last_key, (uint64_t)kvp.key );
 				}
+				/*
+				if ( kvp.key != last_key+1 ) {
+					printf( "!! %lu << %lu\n", kvp.key, last_key );
+				}
+				*/
+
 				if ( out_offset + kv_bytes <= out_block.bytes ) {
 					StreamMergeReducer<K,V>::EncodeKvp(out_block.buffer, out_offset, last_key, last_val);
 					out_offset += kv_bytes;
@@ -321,9 +327,6 @@ SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::WorkerThread() {
 				}
 
 				while ( 0 > mp_temp_file_manager->Read(file, file_offset[src], block.bytes, block.buffer) );
-				file_offset[src] += block.bytes;
-				reads_inflight[src] ++;
-				total_reads_inflight ++;
 
 				if ( block.bytes + file_offset[src] <= file->bytes ) {
 					block.valid_bytes = block.bytes;
@@ -334,6 +337,10 @@ SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::WorkerThread() {
 				}
 				//printf( "Read req! %2d %lu\n",src, file_offset[src] );
 				//fflush(stdout);
+				
+				file_offset[src] += block.bytes;
+				reads_inflight[src] ++;
+				total_reads_inflight ++;
 
 				read_request_order.push(std::make_tuple(src,block));
 				//printf("Sent read requests\n");fflush(stdout);
@@ -396,7 +403,6 @@ SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::WorkerThread() {
 				kvp.src = src;
 				m_priority_queue.push(kvp);
 			} else {
-				//TODO close file
 				SortReduceTypes::File* file = mv_input_sources[src].file;
 				mp_temp_file_manager->Close(file->fd);
 				//printf( "File closed! %2d\n", src ); fflush(stdout);

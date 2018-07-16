@@ -145,7 +145,7 @@ int main(int argc, char** argv) {
 			printf( "Result key order wrong %lu %lu\n", last_key, key );
 		} else {
 			if ( last_key + 1 != key ) {
-				printf( "Skipped %lu!\n", last_key+1 );
+				printf( "Skipped %lu! << %lu\n", last_key+1, key );
 			}
 			last_key = key;
 		}
