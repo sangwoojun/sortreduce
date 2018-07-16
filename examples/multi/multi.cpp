@@ -56,7 +56,7 @@ InputGenerator<K,V>::WorkerThread() {
 	for ( uint64_t i = 0; i < mp_count; i++ ) {
 		//uint64_t key = 1;
 		//uint64_t key = (uint64_t)(rand_r(&rand_seed));
-		uint64_t key = i;//(uint64_t)(rand_r(&rand_seed));
+		uint64_t key = (uint64_t)(rand_r(&rand_seed));
 		while ( !ep->Update(key, 1) ) {}
 	}
 	ep->Finish();
@@ -109,17 +109,19 @@ int main(int argc, char** argv) {
 	//for ( uint32_t i = 0; i < 1024*1024*128; i++ ) {
 	for ( uint64_t i = 0; i < element_count; i++ ) { //  8*12 GB
 		//uint64_t key = (uint64_t)(rand()&0xffff);
-		uint64_t key = i;
-		//uint64_t key = (uint64_t)(rand());
+		//uint64_t key = i;
+		uint64_t key = (uint64_t)(rand());
 		//uint64_t key = 1;
 		//while ( !sr->Update(key, (1<<16)|1, false) );
 		while ( !sr->Update(key, 1) ) {
-			printf( "!" );
+			//printf( "!" );
 		}
 	}
 	sr->Finish();
 
-	printf( "Input done\n" ); fflush(stdout);
+	end = std::chrono::high_resolution_clock::now();
+	duration_milli = std::chrono::duration_cast<std::chrono::milliseconds> (end-start);
+	printf( "Input done! Elapsed: %lu ms\n", duration_milli.count() ); fflush(stdout);
 
 	SortReduceTypes::Status status = sr->CheckStatus();
 	while ( status.done_external == false ) {
@@ -130,8 +132,6 @@ int main(int argc, char** argv) {
 	}
 	end = std::chrono::high_resolution_clock::now();
 	duration_milli = std::chrono::duration_cast<std::chrono::milliseconds> (end-start);
-
-
 	printf( "Sort-reduce done! Elapsed: %lu ms\n", duration_milli.count() ); fflush(stdout);
 
 
@@ -144,9 +144,6 @@ int main(int argc, char** argv) {
 		if ( last_key > key ) {
 			printf( "Result key order wrong %lu %lu\n", last_key, key );
 		} else {
-			if ( last_key + 1 != key ) {
-				printf( "Skipped %lu! << %lu\n", last_key+1, key );
-			}
 			last_key = key;
 		}
 

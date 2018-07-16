@@ -228,12 +228,14 @@ SortReduce<K,V>::ManagerThread() {
 				size_t in_block_count = mp_block_sorter->GetInBlockCount();
 				size_t out_block_count = mp_block_sorter->GetOutBlockCount();
 				size_t block_sorter_thread_count = mp_block_sorter->GetThreadCount();
-				size_t reducer_from_mem_threads = mv_stream_mergers_from_mem.size();
-				size_t reducer_from_storage_threads = mv_stream_mergers_from_storage.size();
+				//size_t reducer_from_mem_threads = mv_stream_mergers_from_mem.size();
+				//size_t reducer_from_storage_threads = mv_stream_mergers_from_storage.size();
 
-				int threads_available = m_maximum_threads - 1 - reducer_from_mem_threads - reducer_from_storage_threads;
+				int threads_available = m_maximum_threads - 1 - block_sorter_thread_count - reducer_from_mem_max_count;// reducer_from_mem_threads - reducer_from_storage_threads;
 
-				if ( block_sorter_thread_count*2 < in_block_count ) {
+				//printf( "---%d - %lu %lu\n", free_cnt, in_block_count, out_block_count );
+
+				if ( block_sorter_thread_count < in_block_count ) {
 					// If backed up more than there are threads*2
 					// Bottleneck is the block sorter
 
@@ -244,31 +246,34 @@ SortReduce<K,V>::ManagerThread() {
 							reducer_from_mem_max_count --;
 							printf( "reducer_from_mem_max_count %d\n", reducer_from_mem_max_count ); fflush(stdout);
 						} else {
-							printf( "No more reducers to kill\n" );
+							//printf( "No more reducers to kill\n" );
 						}
 					}
 				} 
-				if ( reducer_from_mem_fan_in*2 < out_block_count ) {
+				if ( reducer_from_mem_fan_in < out_block_count || in_block_count == 0 ) {
 					// If output backed up more than fan in*2
 					// Bottleneck is the from-mem reducer
 					
 					if ( threads_available > 0 ) {
 						reducer_from_mem_max_count ++;
-						printf( "reducer_from_mem_max_count %d\n", reducer_from_mem_max_count ); fflush(stdout);
+						printf( "reducer_from_mem_max_count %d << %d\n", reducer_from_mem_max_count, threads_available ); fflush(stdout);
 					} else {
 						// delete sorter thread
 						// reducer_from_mem_max_count can be increased next
 						if ( block_sorter_thread_count > 1 ) {
 							mp_block_sorter->KillThread();
+							//printf( "Killing thread\n" );
 						} else {
-							printf( "No more block sorters to kill\n" );
+							//printf( "No more block sorters to kill\n" );
 						}
 					}
 				}
+				fflush(stdout);
+			} else {
+				// TODO check if input is bottleneck
 			}
 
 
-			// TODO check if input is bottleneck
 		}
 
 		// if GetOutBlock() returns more than ...say 16, spawn a merge-reducer
