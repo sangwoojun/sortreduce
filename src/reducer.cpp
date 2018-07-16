@@ -330,17 +330,15 @@ SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::WorkerThread() {
 				} else {
 					block.valid_bytes = file->bytes - file_offset[src];
 					file_eof[src] = true;
+					//printf( "Reached eof %2d!!\n", src ); 
 				}
+				//printf( "Read req! %2d %lu\n",src, file_offset[src] );
+				//fflush(stdout);
 
 				read_request_order.push(std::make_tuple(src,block));
 				//printf("Sent read requests\n");fflush(stdout);
 			}
 
-			size_t debt = read_offset[src] + kv_bytes - block.valid_bytes;
-			size_t available = kv_bytes - debt;
-			K key;
-			V val;
-	
 			while (ready_blocks[src].size() < 2 && reads_inflight[src] > 0 ) {
 				int read_done = mp_temp_file_manager->ReadStatus(true);
 				total_reads_inflight -= read_done;
@@ -354,6 +352,8 @@ SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::WorkerThread() {
 					reads_inflight[dst] --;
 
 					ready_blocks[dst].push(block);
+
+					//printf( "File read %d\n", src ); fflush(stdout);
 				}
 
 				if ( total_reads_inflight < 0 ) {
@@ -363,25 +363,23 @@ SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::WorkerThread() {
 
 			SortReduceTypes::Block cur_block = ready_blocks[src].front();
 			if ( ready_blocks[src].size() > 1 ) { // If not, we're done!
+				size_t debt = read_offset[src] + kv_bytes - block.valid_bytes;
+				size_t available = kv_bytes - debt;
 
+				K key;
+				V val;
+	
 				if ( available >= sizeof(K) ) {
 					// cut within V
 					key = StreamMergeReducer<K,V>::DecodeKey(block.buffer, read_offset[src]);
 					read_offset[src] += sizeof(K);
 					memcpy(&val, ((uint8_t*)block.buffer+read_offset[src]), available-sizeof(K));
-					// deq, or wait until 
-					if ( ready_blocks[src].size() <= 1 ) {
-						fprintf(stderr, "ready_blocks[%d] should have data! %s:%d\n", src, __FILE__, __LINE__ );
-					} 
 					ready_blocks[src].pop();
 					SortReduceTypes::Block block = ready_blocks[src].front();
 					memcpy(((uint8_t*)&val)+available-sizeof(K), block.buffer, debt);
 					read_offset[src] = debt;
 				} else {
 					// cut within K
-					if ( ready_blocks[src].size() <= 1 ) {
-						fprintf(stderr, "ready_blocks[%d] should have data! %s:%d\n", src, __FILE__, __LINE__ );
-					
 					memcpy(&key, ((uint8_t*)block.buffer+read_offset[src]), available);
 					ready_blocks[src].pop();
 					SortReduceTypes::Block block = ready_blocks[src].front();
@@ -390,12 +388,18 @@ SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::WorkerThread() {
 					read_offset[src] = sizeof(K)-available;
 					val = StreamMergeReducer<K,V>::DecodeVal(block.buffer, read_offset[src]);
 					read_offset[src] += sizeof(V);
-					} 
 				}
+
+				KvPairSrc kvp;
+				kvp.key = key;
+				kvp.val = val;
+				kvp.src = src;
+				m_priority_queue.push(kvp);
 			} else {
 				//TODO close file
 				SortReduceTypes::File* file = mv_input_sources[src].file;
 				mp_temp_file_manager->Close(file->fd);
+				//printf( "File closed! %2d\n", src ); fflush(stdout);
 			}
 
 			buffer_manager->ReturnBuffer(cur_block);

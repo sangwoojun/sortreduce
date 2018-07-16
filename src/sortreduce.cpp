@@ -206,6 +206,10 @@ SortReduce<K,V>::ManagerThread() {
 
 	last_time = std::chrono::high_resolution_clock::now();
 
+	uint64_t total_blocks_sorted = 0;
+	uint64_t total_bytes_file_from_mem = 0;
+	uint64_t total_bytes_file_from_storage = 0;
+
 	while (true) {
 		//sleep(1);
 		//if ( !m_done_inmem ) mp_block_sorter->CheckSpawnThreads();
@@ -299,6 +303,7 @@ SortReduce<K,V>::ManagerThread() {
 				SortReduceTypes::File* reduced_file = reducer->GetOutFile();
 				m_file_priority_queue.push(reduced_file);
 				//printf( "Storage->Storage Pushed sort-reduced file ( size %lu ) -> %lu\n", reduced_file->bytes, m_file_priority_queue.size() ); fflush(stdout);
+				total_bytes_file_from_storage += reduced_file->bytes;
 
 				mv_stream_mergers_from_storage.erase(mv_stream_mergers_from_storage.begin() + i);
 				delete reducer;
@@ -317,7 +322,7 @@ SortReduce<K,V>::ManagerThread() {
 				//printf( "%d -- %x %x\n", i, *((uint32_t*)block.buffer),((uint32_t*)block.buffer)[1] );
 			}
 			merger->Start();
-
+			total_blocks_sorted += to_sort;
 
 			mv_stream_mergers_from_mem.push_back(merger);
 		}
@@ -328,6 +333,7 @@ SortReduce<K,V>::ManagerThread() {
 				SortReduceTypes::File* reduced_file = reducer->GetOutFile();
 				m_file_priority_queue.push(reduced_file);
 				//printf( "Pushed sort-reduced file ( size %lu ) -> %lu\n", reduced_file->bytes, m_file_priority_queue.size() ); fflush(stdout);
+				total_bytes_file_from_mem += reduced_file->bytes;
 
 				//size_t fsize = lseek(reduced_file->fd, 0, SEEK_END);
 				//printf( "File size %lx %lx\n", fsize, reduced_file->bytes );
@@ -352,7 +358,10 @@ SortReduce<K,V>::ManagerThread() {
 
 			m_done_external = true;
 
-			printf( "Sort-reduce all done!\n" ); fflush(stdout);
+			printf( "Sort-reduce all done! Processed %lu blocks\n", total_blocks_sorted); 
+			printf( "Wrote %lu bytes to storage during inmem phase\n", total_bytes_file_from_mem );
+			printf( "Wrote %lu bytes to storage during storage phase\n", total_bytes_file_from_storage );
+			fflush(stdout);
 			break;
 		}
 

@@ -109,11 +109,12 @@ int main(int argc, char** argv) {
 	//for ( uint32_t i = 0; i < 1024*1024*128; i++ ) {
 	for ( uint64_t i = 0; i < element_count; i++ ) { //  8*12 GB
 		//uint64_t key = (uint64_t)(rand()&0xffff);
-		uint64_t key = (uint64_t)(rand());
+		uint64_t key = i;
+		//uint64_t key = (uint64_t)(rand());
 		//uint64_t key = 1;
 		//while ( !sr->Update(key, (1<<16)|1, false) );
 		while ( !sr->Update(key, 1) ) {
-			//printf( "!" );
+			printf( "!" );
 		}
 	}
 	sr->Finish();
@@ -133,6 +134,7 @@ int main(int argc, char** argv) {
 
 	printf( "Sort-reduce done! Elapsed: %lu ms\n", duration_milli.count() ); fflush(stdout);
 
+
 	uint64_t last_key = 0;
 	std::tuple<uint64_t,uint32_t,bool> kvp = sr->Next();
 	while ( std::get<2>(kvp) ) {
@@ -141,10 +143,17 @@ int main(int argc, char** argv) {
 
 		if ( last_key > key ) {
 			printf( "Result key order wrong %lu %lu\n", last_key, key );
+		} else {
+			if ( last_key + 1 != key ) {
+				printf( "Skipped %lu!\n", last_key+1 );
+			}
+			last_key = key;
 		}
 
 		kvp = sr->Next();
 	}
+
+	printf( "Largest key: %lu\n",last_key );
 
 
 
