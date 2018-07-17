@@ -67,6 +67,27 @@ sr->Finish();
 
 ```
 
+After all input is given, we must wait until sort-reduce is done, like the following:
+Hundreds of gigabytes worth of updates, sort-reduce may take minutes to finish.
+
+```
+SortReduceTypes::Status status = sr->CheckStatus();
+while ( status.done_external == false ) {
+	sleep(1);
+	status = sr->CheckStatus();
+}
+```
+
+Once sort-reduce finishes, the sort-reduced results can be read like the following:
+
+```
+std::tuple<uint64_t,uint32_t,bool> kvp = sr->Next();
+while ( std::get<2>(kvp) ) {
+	uint64_t key = std::get<0>(kvp);
+	uint32_t val = std::get<1>(kvp);
+}
+```
+
 
 ### Building
 
