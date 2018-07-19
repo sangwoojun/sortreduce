@@ -226,7 +226,7 @@ SortReduce<K,V>::ManagerThread() {
 
 			if ( free_cnt == 0 ) {
 				size_t in_block_count = mp_block_sorter->GetInBlockCount();
-				size_t out_block_count = mp_block_sorter->GetOutBlockCount();
+				//size_t out_block_count = mp_block_sorter->GetOutBlockCount();
 				size_t block_sorter_thread_count = mp_block_sorter->GetThreadCount();
 				//size_t reducer_from_mem_threads = mv_stream_mergers_from_mem.size();
 				//size_t reducer_from_storage_threads = mv_stream_mergers_from_storage.size();
@@ -250,14 +250,14 @@ SortReduce<K,V>::ManagerThread() {
 						}
 					}
 				} 
-				if ( reducer_from_mem_fan_in < out_block_count || in_block_count == 0 ) {
+				if ( /*reducer_from_mem_fan_in < out_block_count ||*/ in_block_count == 0 ) {
 					// If output backed up more than fan in*2
 					// Bottleneck is the from-mem reducer
 					
 					if ( threads_available > 0 ) {
 						reducer_from_mem_max_count ++;
 						printf( "reducer_from_mem_max_count %d << %d\n", reducer_from_mem_max_count, threads_available ); fflush(stdout);
-					} else {
+					} else if ( reducer_from_mem_fan_in * reducer_from_mem_max_count + block_sorter_thread_count < m_config->buffer_count ) {
 						// delete sorter thread
 						// reducer_from_mem_max_count can be increased next
 						if ( block_sorter_thread_count > 1 ) {

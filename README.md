@@ -19,7 +19,7 @@ For each update request into __index__ using __argument__, X[index] = **f**(X[in
 For example, constructing a histogram would repeat X[index] = X[index] + 1.
 
 Sort-reduce logs and sort the <__index__,__argument__> pair for all update requests, turning it sequential.
-In order to reduce the overhead of sorting, whenever two update requests with the same __index__ are discovered, **f** is applied between two __argument__s, reducing two update requests into one.
+In order to reduce the overhead of sorting, whenever two update requests with the same __index__ are discovered, **f** is applied between two __argument__, reducing two update requests into one.
 
 More details about the sort-reduce algorithm, as well as its application to graph analytics, can be seen in the paper [GraFBoost: Accelerated Flash Storage for External Graph Analytics](http://people.csail.mit.edu/wjun/papers/isca2018-camera.pdf).
 
