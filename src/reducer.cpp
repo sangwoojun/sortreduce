@@ -7,6 +7,77 @@ TODO internal structure of the file block format
 i.e., uint64_t at the beginning for valid bytes
 
 **/
+template <class K, class V>
+SortReduceReducer::StreamMergeReducer<K,V>::StreamMergeReducer() {
+	this->m_out_offset = 0;
+	this->m_out_file_offset = 0;
+	this->mp_buffer_manager = AlignedBufferManager::GetInstance(1);
+	
+	m_out_block = mp_buffer_manager->GetBuffer();
+	while (!m_out_block.valid) {
+		mp_temp_file_manager->CheckDone();
+		m_out_block = mp_buffer_manager->GetBuffer();
+	}
+}
+
+template <class K, class V>
+inline void
+SortReduceReducer::StreamMergeReducer<K,V>::EmitKv(K key, V val) {
+	const size_t kv_bytes = sizeof(K)+sizeof(V);
+
+	if ( m_out_offset + kv_bytes <= m_out_block.bytes ) {
+		StreamMergeReducer<K,V>::EncodeKvp(m_out_block.buffer, m_out_offset, key, val);
+		m_out_offset += kv_bytes;
+
+	} else {
+		size_t available = m_out_block.bytes - m_out_offset;
+		size_t debt = kv_bytes - available;
+		if ( available >= sizeof(K) ) {
+			StreamMergeReducer<K,V>::EncodeKey(m_out_block.buffer, m_out_offset, key);
+			available -= sizeof(K);
+			memcpy(((uint8_t*)m_out_block.buffer)+m_out_offset+sizeof(K), &val, available);
+
+			m_out_block.valid_bytes = m_out_block.bytes;
+			while ( !this->mp_temp_file_manager->Write(this->m_out_file, m_out_block, m_out_file_offset) ) usleep(50);
+			m_out_file_offset += m_out_block.valid_bytes;
+			m_out_block = mp_buffer_manager->GetBuffer();
+			while (!m_out_block.valid) {
+				this->mp_temp_file_manager->CheckDone();
+				m_out_block = mp_buffer_manager->GetBuffer();
+			}
+
+			memcpy(m_out_block.buffer, ((uint8_t*)&val)+available, debt);
+			m_out_offset = debt;
+		} else {
+			memcpy(((uint8_t*)m_out_block.buffer)+m_out_offset, &key, available);
+
+			m_out_block.valid_bytes = m_out_block.bytes;
+			while ( !this->mp_temp_file_manager->Write(this->m_out_file, m_out_block, m_out_file_offset) ) usleep(50);
+			m_out_file_offset += m_out_block.valid_bytes;
+
+			m_out_block = mp_buffer_manager->GetBuffer();
+			while (!m_out_block.valid) {
+				this->mp_temp_file_manager->CheckDone();
+				m_out_block = mp_buffer_manager->GetBuffer();
+			}
+
+			memcpy(m_out_block.buffer, ((uint8_t*)&key)+available, sizeof(K)-available);
+			StreamMergeReducer<K,V>::EncodeVal(m_out_block.buffer, sizeof(K)-available, val);
+			m_out_offset = debt;
+		}
+
+	}
+}
+
+template <class K, class V>
+void
+SortReduceReducer::StreamMergeReducer<K,V>::EmitFlush() {
+	m_out_block.valid_bytes = m_out_offset;
+	while ( !this->mp_temp_file_manager->Write(this->m_out_file, m_out_block, m_out_file_offset) ) usleep(50);
+	m_out_file_offset += m_out_block.valid_bytes;
+
+	while (this->mp_temp_file_manager->CountInFlight() > 0 ) this->mp_temp_file_manager->CheckDone();
+}
 
 template <class K, class V>
 inline K
@@ -62,22 +133,22 @@ SortReduceReducer::ReduceInBuffer(V (*update)(V,V), void* buffer, size_t bytes) 
 }
 
 template <class K, class V>
-SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::StreamMergeReducer_SinglePriority(V (*update)(V,V), std::string temp_directory, std::string filename) {
+SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::StreamMergeReducer_SinglePriority(V (*update)(V,V), std::string temp_directory, std::string filename) : SortReduceReducer::StreamMergeReducer<K,V>() {
 	this->m_done = false;
 	this->m_started = false;
 
-	this->ms_temp_directory = temp_directory;
+	//this->ms_temp_directory = temp_directory;
 	this->mp_update = update;
 
 	this->mp_temp_file_manager = new TempFileManager(temp_directory);
 	
-	m_out_file = mp_temp_file_manager->CreateEmptyFile(filename);
+	this->m_out_file = this->mp_temp_file_manager->CreateEmptyFile(filename);
 }
 
 template <class K, class V>
 SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::~StreamMergeReducer_SinglePriority() {
 	m_worker_thread.join();
-	delete mp_temp_file_manager;
+	delete this->mp_temp_file_manager;
 	//printf( "Worker thread joined\n" );
 }
 
@@ -157,7 +228,7 @@ SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::WorkerThread() {
 
 			//printf( "Block %ld %d\n",block.bytes,block.managed_idx ); fflush(stdout);
 
-			while ( 0 > mp_temp_file_manager->Read(file, file_offset[i], block.bytes, block.buffer) );
+			while ( 0 > this->mp_temp_file_manager->Read(file, file_offset[i], block.bytes, block.buffer) );
 			reads_inflight[i] ++;
 			total_reads_inflight ++;
 
@@ -178,7 +249,7 @@ SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::WorkerThread() {
 	}
 
 	while (total_reads_inflight > 0 ) {
-		int read_done = mp_temp_file_manager->ReadStatus(true);
+		int read_done = this->mp_temp_file_manager->ReadStatus(true);
 		total_reads_inflight -= read_done;
 
 		for ( int i = 0; i < read_done; i++ ) {
@@ -220,16 +291,8 @@ SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::WorkerThread() {
 		read_offset[i] += kv_bytes;
 	}
 	
-	SortReduceTypes::Block out_block = buffer_manager->GetBuffer();
-	while (!out_block.valid) {
-		mp_temp_file_manager->CheckDone();
-		out_block = buffer_manager->GetBuffer();
-	}
-	size_t out_offset = 0;
-	size_t out_file_offset = 0;
-
-	K last_key;
-	V last_val;
+	K last_key = 0;
+	V last_val = 0;
 	bool first_kvp = true;
 
 	while (!m_priority_queue.empty() ) {
@@ -250,56 +313,7 @@ SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::WorkerThread() {
 				if ( last_key > kvp.key ) {
 					printf( "StreamMergeReducer_SinglePriority order wrong! %lx %lx\n", (uint64_t)last_key, (uint64_t)kvp.key );
 				}
-				/*
-				if ( kvp.key != last_key+1 ) {
-					printf( "!! %lu << %lu\n", kvp.key, last_key );
-				}
-				*/
-
-				if ( out_offset + kv_bytes <= out_block.bytes ) {
-					StreamMergeReducer<K,V>::EncodeKvp(out_block.buffer, out_offset, last_key, last_val);
-					out_offset += kv_bytes;
-					last_key = kvp.key;
-					last_val = kvp.val;
-
-				} else {
-					size_t available = out_block.bytes - out_offset;
-					size_t debt = kv_bytes - available;
-					if ( available >= sizeof(K) ) {
-						StreamMergeReducer<K,V>::EncodeKey(out_block.buffer, out_offset, last_key);
-						available -= sizeof(K);
-						memcpy(((uint8_t*)out_block.buffer)+out_offset+sizeof(K), &last_val, available);
-
-						out_block.valid_bytes = out_block.bytes;
-						while ( !mp_temp_file_manager->Write(m_out_file, out_block, out_file_offset) ) usleep(50);
-						out_file_offset += out_block.valid_bytes;
-						out_block = buffer_manager->GetBuffer();
-						while (!out_block.valid) {
-							mp_temp_file_manager->CheckDone();
-							out_block = buffer_manager->GetBuffer();
-						}
-
-						memcpy(out_block.buffer, ((uint8_t*)&last_val)+available, debt);
-						out_offset = debt;
-					} else {
-						memcpy(((uint8_t*)out_block.buffer)+out_offset, &last_key, available);
-						
-						out_block.valid_bytes = out_block.bytes;
-						while ( !mp_temp_file_manager->Write(m_out_file, out_block, out_file_offset) ) usleep(50);
-						out_file_offset += out_block.valid_bytes;
-
-						out_block = buffer_manager->GetBuffer();
-						while (!out_block.valid) {
-							mp_temp_file_manager->CheckDone();
-							out_block = buffer_manager->GetBuffer();
-						}
-						
-						memcpy(out_block.buffer, ((uint8_t*)&last_key)+available, sizeof(K)-available);
-						StreamMergeReducer<K,V>::EncodeVal(out_block.buffer, sizeof(K)-available, last_val);
-						out_offset = debt;
-					}
-
-				}
+				this->EmitKv(last_key, last_val);
 				last_key = kvp.key;
 				last_val = kvp.val;
 			}
@@ -322,11 +336,11 @@ SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::WorkerThread() {
 				SortReduceTypes::File* file = mv_input_sources[src].file;
 				SortReduceTypes::Block block = buffer_manager->GetBuffer();
 				while (!block.valid) {
-					mp_temp_file_manager->CheckDone();
+					this->mp_temp_file_manager->CheckDone();
 					block = buffer_manager->GetBuffer();
 				}
 
-				while ( 0 > mp_temp_file_manager->Read(file, file_offset[src], block.bytes, block.buffer) );
+				while ( 0 > this->mp_temp_file_manager->Read(file, file_offset[src], block.bytes, block.buffer) );
 
 				if ( block.bytes + file_offset[src] <= file->bytes ) {
 					block.valid_bytes = block.bytes;
@@ -347,7 +361,7 @@ SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::WorkerThread() {
 			}
 
 			while (ready_blocks[src].size() < 2 && reads_inflight[src] > 0 ) {
-				int read_done = mp_temp_file_manager->ReadStatus(true);
+				int read_done = this->mp_temp_file_manager->ReadStatus(true);
 				total_reads_inflight -= read_done;
 
 				for ( int i = 0; i < read_done; i++ ) {
@@ -404,7 +418,7 @@ SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::WorkerThread() {
 				m_priority_queue.push(kvp);
 			} else {
 				SortReduceTypes::File* file = mv_input_sources[src].file;
-				mp_temp_file_manager->Close(file->fd);
+				this->mp_temp_file_manager->Close(file->fd);
 				//printf( "File closed! %2d\n", src ); fflush(stdout);
 			}
 
@@ -424,51 +438,8 @@ SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::WorkerThread() {
 	}
 
 	//flush out_block
-	if ( out_offset + kv_bytes <= out_block.bytes ) {
-		StreamMergeReducer<K,V>::EncodeKvp(out_block.buffer, out_offset, last_key, last_val);
-		out_offset += kv_bytes;
-	} else {
-		size_t available = out_block.bytes - out_offset;
-		size_t debt = kv_bytes - available;
-		if ( available >= sizeof(K) ) {
-			StreamMergeReducer<K,V>::EncodeKey(out_block.buffer, out_offset, last_key);
-			available -= sizeof(K);
-			memcpy(((uint8_t*)out_block.buffer)+out_offset+sizeof(K), &last_val, available);
-
-			out_block.valid_bytes = out_block.bytes;
-			while ( !mp_temp_file_manager->Write(m_out_file, out_block, out_file_offset) ) usleep(50);
-			out_file_offset += out_block.valid_bytes;
-			out_block = buffer_manager->GetBuffer();
-			while (!out_block.valid) {
-				mp_temp_file_manager->CheckDone();
-				out_block = buffer_manager->GetBuffer();
-			}
-
-			memcpy(out_block.buffer, ((uint8_t*)&last_val)+available, debt);
-			out_offset = debt;
-		} else {
-			memcpy(((uint8_t*)out_block.buffer)+out_offset, &last_key, available);
-
-			out_block.valid_bytes = out_block.bytes;
-			while ( !mp_temp_file_manager->Write(m_out_file, out_block, out_file_offset) ) usleep(50);
-			out_file_offset += out_block.valid_bytes;
-
-			out_block = buffer_manager->GetBuffer();
-			while (!out_block.valid) {
-				mp_temp_file_manager->CheckDone();
-				out_block = buffer_manager->GetBuffer();
-			}
-
-			memcpy(out_block.buffer, ((uint8_t*)&last_key)+available, sizeof(K)-available);
-			StreamMergeReducer<K,V>::EncodeVal(out_block.buffer, sizeof(K)-available, last_val);
-			out_offset = debt;
-		}
-	}
-	out_block.valid_bytes = out_offset;
-	while ( !mp_temp_file_manager->Write(m_out_file, out_block, out_file_offset) ) usleep(50);
-	out_file_offset += out_block.valid_bytes;
-
-	while (mp_temp_file_manager->CountInFlight() > 0 ) mp_temp_file_manager->CheckDone();
+	this->EmitKv(last_key, last_val);
+	this->EmitFlush();
 
 	//printf( "Reducer done!\n" ); fflush(stdout);
 

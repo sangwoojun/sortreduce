@@ -199,6 +199,7 @@ SortReduce<K,V>::ManagerThread() {
 	//printf( "maximum threads: %d\n", config->maximum_threads );
 
 	const size_t reducer_from_mem_fan_in = 16;
+	const size_t reducer_from_mem_fan_in_max = 16;
 	int reducer_from_mem_max_count = 1;
 
 	std::chrono::high_resolution_clock::time_point last_time;
@@ -257,7 +258,7 @@ SortReduce<K,V>::ManagerThread() {
 					if ( threads_available > 0 ) {
 						reducer_from_mem_max_count ++;
 						printf( "reducer_from_mem_max_count %d << %d\n", reducer_from_mem_max_count, threads_available ); fflush(stdout);
-					} else if ( reducer_from_mem_fan_in * reducer_from_mem_max_count + block_sorter_thread_count < m_config->buffer_count ) {
+					} else if ( reducer_from_mem_fan_in_max * reducer_from_mem_max_count + block_sorter_thread_count < m_config->buffer_count ) {
 						// delete sorter thread
 						// reducer_from_mem_max_count can be increased next
 						if ( block_sorter_thread_count > 1 ) {
@@ -316,9 +317,9 @@ SortReduce<K,V>::ManagerThread() {
 		}
 
 		size_t sorted_blocks_cnt = mp_block_sorter->GetOutBlockCount();
-		if ( ((m_done_input && sorted_blocks_cnt>0) || sorted_blocks_cnt >= 16) && mv_stream_mergers_from_mem.size() < reducer_from_mem_max_count ) {
+		if ( ((m_done_input && sorted_blocks_cnt>0) || sorted_blocks_cnt >= reducer_from_mem_fan_in) && mv_stream_mergers_from_mem.size() < reducer_from_mem_max_count ) {
 			SortReduceReducer::StreamMergeReducer<K,V>* merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory);
-			int to_sort = (sorted_blocks_cnt > 64)?64:sorted_blocks_cnt; //TODO
+			int to_sort = (sorted_blocks_cnt > reducer_from_mem_fan_in_max)?reducer_from_mem_fan_in_max:sorted_blocks_cnt; //TODO
 			
 			for ( size_t i = 0; i < to_sort; i++ ) {
 				SortReduceTypes::Block block = mp_block_sorter->GetOutBlock();

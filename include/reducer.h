@@ -19,6 +19,7 @@ namespace SortReduceReducer {
 	template <class K, class V>
 	class StreamMergeReducer {
 	public:
+		StreamMergeReducer();
 		virtual ~StreamMergeReducer() {};
 		virtual void PutBlock(SortReduceTypes::Block block) = 0;
 		virtual void PutFile(SortReduceTypes::File* file) = 0;
@@ -26,17 +27,29 @@ namespace SortReduceReducer {
 		virtual bool IsDone() = 0;
 		virtual SortReduceTypes::File* GetOutFile() = 0;
 
+	protected:
 		typedef struct {
 			K key;
 			V val;
 		} KvPair;
-	
-	//private:
+
 		static K DecodeKey(void* buffer, size_t offset);
 		static V DecodeVal(void* buffer, size_t offset);
 		static void EncodeKvp(void* buffer, size_t offset, K key, V val);
 		static void EncodeKey(void* buffer, size_t offset, K key);
 		static void EncodeVal(void* buffer, size_t offset, V val);
+		
+		SortReduceTypes::File* m_out_file;
+		SortReduceTypes::Block m_out_block; //TODO
+		size_t m_out_offset; //TODO
+		size_t m_out_file_offset; // TODO
+
+		//std::string ms_temp_directory;
+		AlignedBufferManager* mp_buffer_manager;
+		TempFileManager* mp_temp_file_manager;
+
+		void EmitKv(K key, V val);
+		void EmitFlush();
 	};
 
 	template <class K, class V>
@@ -49,7 +62,7 @@ namespace SortReduceReducer {
 		void PutFile(SortReduceTypes::File* file);
 		void Start();
 		bool IsDone() { return m_done; };
-		SortReduceTypes::File* GetOutFile() {return m_out_file; };
+		SortReduceTypes::File* GetOutFile() {return this->m_out_file; };
 	private:
 		typedef struct {
 			bool from_file;
@@ -73,7 +86,6 @@ namespace SortReduceReducer {
 
 		std::vector<DataSource> mv_input_sources;
 		int m_input_src_idx = 0;
-		SortReduceTypes::File* m_out_file;
 
 		V (*mp_update)(V,V);
 
@@ -82,8 +94,6 @@ namespace SortReduceReducer {
 		std::thread m_worker_thread;
 		std::mutex m_mutex;
 
-		std::string ms_temp_directory;
-		TempFileManager* mp_temp_file_manager;
 		
 
 		bool m_started;
