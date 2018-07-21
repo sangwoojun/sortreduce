@@ -56,7 +56,7 @@ public:
 		std::tuple<K,V,bool> Next();
 
 		bool IsDone() { return m_done; };
-	private:
+private:
 		SortReduce<K,V>* mp_sortreduce;
 	
 		SortReduceTypes::Block m_cur_update_block;

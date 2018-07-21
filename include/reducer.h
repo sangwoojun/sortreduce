@@ -4,6 +4,7 @@
 #include <mutex>
 #include <vector>
 #include <tuple>
+#include <chrono>
 
 #include "alignedbuffermanager.h"
 #include "tempfilemanager.h"

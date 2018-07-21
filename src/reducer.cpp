@@ -298,6 +298,10 @@ SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::WorkerThread() {
 	const int source_count = this->mv_input_sources.size();
 	
 	std::vector<size_t> read_offset(source_count, 0);
+
+	std::chrono::high_resolution_clock::time_point last_time;
+	std::chrono::milliseconds duration_milli;
+	last_time = std::chrono::high_resolution_clock::now();
 	
 	AlignedBufferManager* buffer_manager = AlignedBufferManager::GetInstance(1);
 
@@ -441,6 +445,12 @@ SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::WorkerThread() {
 	//printf( "Reducer done!\n" ); fflush(stdout);
 
 	this->m_done = true;
+
+	std::chrono::high_resolution_clock::time_point now;
+	now = std::chrono::high_resolution_clock::now();
+	duration_milli = std::chrono::duration_cast<std::chrono::milliseconds> (now-last_time);
+
+	printf( "StreamMergeReducer_SinglePriority %d elapsed: %lu ms\n", source_count, duration_milli.count() );
 }
 
 template class SortReduceReducer::StreamMergeReducer<uint32_t, uint32_t>;

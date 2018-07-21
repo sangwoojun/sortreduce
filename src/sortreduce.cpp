@@ -201,7 +201,7 @@ SortReduce<K,V>::ManagerThread() {
 	const size_t reducer_from_mem_fan_in = 16;
 	const size_t reducer_from_mem_fan_in_max = 16;
 	int reducer_from_mem_max_count = 1;
-
+	
 	std::chrono::high_resolution_clock::time_point last_time;
 	std::chrono::milliseconds duration_milli;
 
@@ -279,7 +279,10 @@ SortReduce<K,V>::ManagerThread() {
 
 		// if GetOutBlock() returns more than ...say 16, spawn a merge-reducer
 		size_t temp_file_count = m_file_priority_queue.size();
-		if ( m_done_inmem && ((m_done_inmem&&temp_file_count>1) || temp_file_count > 16) && mv_stream_mergers_from_storage.size() < m_maximum_threads ) { //FIXME
+		if ( m_done_inmem && ((m_done_inmem&&temp_file_count>1) || temp_file_count >= 16) 
+			&& mv_stream_mergers_from_storage.size() < m_maximum_threads 
+			&& mv_stream_mergers_from_storage.size() < 8 // FIXME
+			) {
 
 			SortReduceReducer::StreamMergeReducer<K,V>* merger;
 			if ( m_done_inmem && mv_stream_mergers_from_storage.empty() ) {
