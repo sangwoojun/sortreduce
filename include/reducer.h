@@ -57,7 +57,7 @@ namespace SortReduceReducer {
 		int m_total_reads_inflight = 0;
 	
 		std::vector<std::queue<SortReduceTypes::Block>> mvq_ready_blocks;
-		const int m_file_reads_inflight_target = 2;
+		const int m_file_reads_inflight_target = 4;
 
 		void FileReadReq(int src);
 		SortReduceTypes::Block GetNextFileBlock(int src);
@@ -71,7 +71,7 @@ namespace SortReduceReducer {
 		static void EncodeKvp(void* buffer, size_t offset, K key, V val);
 		static void EncodeKey(void* buffer, size_t offset, K key);
 		static void EncodeVal(void* buffer, size_t offset, V val);
-		
+
 	private:
 		std::mutex m_mutex;
 	};

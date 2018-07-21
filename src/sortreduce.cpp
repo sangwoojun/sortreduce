@@ -280,10 +280,10 @@ SortReduce<K,V>::ManagerThread() {
 		// if GetOutBlock() returns more than ...say 16, spawn a merge-reducer
 		size_t temp_file_count = m_file_priority_queue.size();
 		if ( m_done_inmem && 
-			//((m_done_inmem&&temp_file_count>1&&mv_stream_mergers_from_storage.empty()) || 
-			//temp_file_count >= 8) 
+			((m_done_inmem&&temp_file_count>1&&mv_stream_mergers_from_storage.empty()) || 
+			temp_file_count >= 4) 
 
-			((m_done_inmem&&temp_file_count>1) || temp_file_count >= 16) 
+			//((m_done_inmem&&temp_file_count>1) || temp_file_count >= 16) 
 			&& mv_stream_mergers_from_storage.size() < m_maximum_threads 
 			&& mv_stream_mergers_from_storage.size() < 8 // FIXME
 			) {
@@ -296,11 +296,20 @@ SortReduce<K,V>::ManagerThread() {
 				merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory);
 			}
 
+			//size_t last_bytes = 0;
 			int to_sort = temp_file_count>32?32:temp_file_count;
 			for ( size_t i = 0; i < to_sort; i++ ) {
 				SortReduceTypes::File* file = m_file_priority_queue.top();
 
 				m_file_priority_queue.pop();
+
+/*
+				if ( last_bytes > file->bytes ) {
+					printf( "File size order wrong!\n" );fflush(stdout);
+				} else {
+					last_bytes = file->bytes;
+				}
+*/
 
 				merger->PutFile(file);
 				//printf( "%d -- %x %x\n", i, *((uint32_t*)block.buffer),((uint32_t*)block.buffer)[1] );
@@ -310,7 +319,7 @@ SortReduce<K,V>::ManagerThread() {
 			mv_stream_mergers_from_storage.push_back(merger);
 		}
 
-		for ( int i = 0; i < mv_stream_mergers_from_storage.size(); i++ ) {
+		for ( int i = 0; i < mv_stream_mergers_from_storage.size(); ) {
 			SortReduceReducer::StreamMergeReducer<K,V>* reducer = mv_stream_mergers_from_storage[i];
 			if ( reducer->IsDone() ) {
 				SortReduceTypes::File* reduced_file = reducer->GetOutFile();
@@ -320,6 +329,9 @@ SortReduce<K,V>::ManagerThread() {
 
 				mv_stream_mergers_from_storage.erase(mv_stream_mergers_from_storage.begin() + i);
 				delete reducer;
+
+			} else {
+				i++;
 			}
 		}
 
@@ -340,7 +352,7 @@ SortReduce<K,V>::ManagerThread() {
 			mv_stream_mergers_from_mem.push_back(merger);
 		}
 
-		for ( int i = 0; i < mv_stream_mergers_from_mem.size(); i++ ) {
+		for ( int i = 0; i < mv_stream_mergers_from_mem.size(); ) {
 			SortReduceReducer::StreamMergeReducer<K,V>* reducer = mv_stream_mergers_from_mem[i];
 			if ( reducer->IsDone() ) {
 				SortReduceTypes::File* reduced_file = reducer->GetOutFile();
@@ -354,6 +366,8 @@ SortReduce<K,V>::ManagerThread() {
 
 				mv_stream_mergers_from_mem.erase(mv_stream_mergers_from_mem.begin() + i);
 				delete reducer;
+			} else {
+				i++;
 			}
 		}
 

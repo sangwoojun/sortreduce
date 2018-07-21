@@ -180,6 +180,7 @@ TempFileManager::Read(SortReduceTypes::File* file, off_t offset, size_t bytes, v
 			bytes = bytes-frag + 0x200;
 		}
 
+		//memset(buffer, 0xcc, bytes);
 
 		memset(&ma_iocb[idx], 0, sizeof(ma_iocb[idx]));
 		io_prep_pread(&ma_iocb[idx], fd, buffer, bytes, offset);
@@ -198,11 +199,12 @@ TempFileManager::Read(SortReduceTypes::File* file, off_t offset, size_t bytes, v
 		if ( ret_count > 0 ) {
 			ret = idx;
 			mq_read_order_idx.push(idx);
+
+			//printf( "Reading file %lx size %lx -- %lu success: %d\n", offset, bytes, mq_free_bufs.size(), ret ); fflush(stdout);
 		} else {
 			mq_free_bufs.push(idx);
 		}
 	}
-	//printf( "Reading file %lx size %lx -- %lu success: %d\n", offset, bytes, mq_free_bufs.size(), ret ); fflush(stdout);
 
 	m_mutex.unlock();
 

@@ -142,7 +142,7 @@ int main(int argc, char** argv) {
 		//uint32_t val = std::get<1>(kvp);
 
 		if ( last_key > key ) {
-			printf( "Result key order wrong %lu %lu\n", last_key, key );
+			printf( "Result key order wrong %lx %lx\n", last_key, key );
 		} else {
 			last_key = key;
 		}
