@@ -458,7 +458,7 @@ SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::WorkerThread() {
 	now = std::chrono::high_resolution_clock::now();
 	duration_milli = std::chrono::duration_cast<std::chrono::milliseconds> (now-last_time);
 
-	//printf( "StreamMergeReducer_SinglePriority %d elapsed: %lu ms\n", source_count, duration_milli.count() );
+	printf( "StreamMergeReducer_SinglePriority %d elapsed: %lu ms\n", source_count, duration_milli.count() );
 }
 
 template class SortReduceReducer::StreamMergeReducer<uint32_t, uint32_t>;
