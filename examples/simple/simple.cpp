@@ -90,7 +90,7 @@ int main(int argc, char** argv) {
 		} else {
 			if ( golden_map[key] != val ) {
 				mismatch_count ++;
-				printf( "%x -- %x\n", golden_map[key], val );
+				printf( "%lx: %x -- %x\n", key, golden_map[key], val );
 			}
 			golden_map.erase(golden_map.find(key));
 		}

@@ -71,6 +71,8 @@ namespace SortReduceReducer {
 		static void EncodeKey(void* buffer, size_t offset, K key);
 		static void EncodeVal(void* buffer, size_t offset, V val);
 		
+	private:
+		std::mutex m_mutex;
 	};
 
 	template <class K, class V>
