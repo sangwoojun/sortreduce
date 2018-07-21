@@ -25,7 +25,6 @@ SortReduceReducer::StreamMergeReducer<K,V>::EmitKv(K key, V val) {
 	if ( m_out_offset + kv_bytes <= m_out_block.bytes ) {
 		StreamMergeReducer<K,V>::EncodeKvp(m_out_block.buffer, m_out_offset, key, val);
 		m_out_offset += kv_bytes;
-
 	} else {
 		size_t available = m_out_block.bytes - m_out_offset;
 		size_t debt = kv_bytes - available;
@@ -37,6 +36,7 @@ SortReduceReducer::StreamMergeReducer<K,V>::EmitKv(K key, V val) {
 			m_out_block.valid_bytes = m_out_block.bytes;
 			while ( !this->mp_temp_file_manager->Write(this->m_out_file, m_out_block, m_out_file_offset) ) usleep(50);
 			m_out_file_offset += m_out_block.valid_bytes;
+
 			m_out_block = mp_buffer_manager->GetBuffer();
 			while (!m_out_block.valid) {
 				this->mp_temp_file_manager->CheckDone();
@@ -159,6 +159,8 @@ SortReduceReducer::StreamMergeReducer<K,V>::FileReadReq(int src) {
 			m_total_reads_inflight ++;
 
 			mq_read_request_order.push(std::make_tuple(src,block));
+		} else {
+			mp_buffer_manager->ReturnBuffer(block);
 		}
 	}
 	//printf( "Block %ld %d\n",block.bytes,block.managed_idx ); fflush(stdout);
@@ -343,10 +345,14 @@ SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::WorkerThread() {
 	V last_val = 0;
 	bool first_kvp = true;
 
+	size_t cur_count = 0;
+
 	while (!m_priority_queue.empty() ) {
 		KvPairSrc kvp = m_priority_queue.top();
 		m_priority_queue.pop();
 		int src = kvp.src;
+
+		cur_count ++;
 
 		//printf( "Next: %lx %lx from %d\n", (uint64_t)kvp.key, (uint64_t)kvp.val, src );
 
@@ -359,7 +365,7 @@ SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::WorkerThread() {
 				last_val = this->mp_update(last_val, kvp.val);
 			} else {
 				if ( last_key > kvp.key ) {
-					printf( "StreamMergeReducer_SinglePriority order wrong! %lx %lx\n", (uint64_t)last_key, (uint64_t)kvp.key );
+					printf( "StreamMergeReducer_SinglePriority order wrong! %lx %lx @ %lu\n", (uint64_t)last_key, (uint64_t)kvp.key, cur_count );
 				}
 				this->EmitKv(last_key, last_val);
 				last_key = kvp.key;
@@ -416,6 +422,8 @@ SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::WorkerThread() {
 					kvp.val = val;
 					kvp.src = src;
 					m_priority_queue.push(kvp);
+				} else {
+					//printf( "This should not happen %lu\n", cur_count ); fflush(stdout);
 				}
 			} else {
 				SortReduceTypes::File* file = this->mv_input_sources[src].file;
@@ -450,7 +458,7 @@ SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::WorkerThread() {
 	now = std::chrono::high_resolution_clock::now();
 	duration_milli = std::chrono::duration_cast<std::chrono::milliseconds> (now-last_time);
 
-	printf( "StreamMergeReducer_SinglePriority %d elapsed: %lu ms\n", source_count, duration_milli.count() );
+	//printf( "StreamMergeReducer_SinglePriority %d elapsed: %lu ms\n", source_count, duration_milli.count() );
 }
 
 template class SortReduceReducer::StreamMergeReducer<uint32_t, uint32_t>;

@@ -29,7 +29,7 @@ SortReduce<K,V>::SortReduce(SortReduceTypes::Config<K,V> *config) {
 
 	//Buffers for file I/O
 	AlignedBufferManager* buffer_manager = AlignedBufferManager::GetInstance(1);
-	buffer_manager->Init(1024*256, 1024*4); //FIXME fixed to 4 GB
+	buffer_manager->Init(1024*1024, 1024*4); //FIXME fixed to 4 GB
 	
 
 	this->m_config = config;
@@ -279,7 +279,8 @@ SortReduce<K,V>::ManagerThread() {
 
 		// if GetOutBlock() returns more than ...say 16, spawn a merge-reducer
 		size_t temp_file_count = m_file_priority_queue.size();
-		if ( m_done_inmem && ((m_done_inmem&&temp_file_count>1) || temp_file_count >= 16) 
+		if ( m_done_inmem && 
+			((m_done_inmem&&temp_file_count>1&&mv_stream_mergers_from_storage.empty()) || temp_file_count >= 16) 
 			&& mv_stream_mergers_from_storage.size() < m_maximum_threads 
 			&& mv_stream_mergers_from_storage.size() < 8 // FIXME
 			) {
@@ -320,7 +321,7 @@ SortReduce<K,V>::ManagerThread() {
 		}
 
 		size_t sorted_blocks_cnt = mp_block_sorter->GetOutBlockCount();
-		if ( ((m_done_input && sorted_blocks_cnt>0) || sorted_blocks_cnt >= reducer_from_mem_fan_in) && mv_stream_mergers_from_mem.size() < reducer_from_mem_max_count ) {
+		if ( ((m_done_input && sorted_blocks_cnt>0&&mv_stream_mergers_from_mem.empty()) || sorted_blocks_cnt >= reducer_from_mem_fan_in) && mv_stream_mergers_from_mem.size() < reducer_from_mem_max_count ) {
 			SortReduceReducer::StreamMergeReducer<K,V>* merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory);
 			int to_sort = (sorted_blocks_cnt > reducer_from_mem_fan_in_max)?reducer_from_mem_fan_in_max:sorted_blocks_cnt; //TODO
 			
