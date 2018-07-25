@@ -125,6 +125,10 @@ TempFileManager::Write(SortReduceTypes::File* file, SortReduceTypes::Block block
 		if ( frag != 0 ) {
 			bytes = bytes - frag + 0x200;
 		}
+		off_t ofrag = offset & 0x1ff;
+		if ( ofrag != 0 ) {
+			offset = bytes-frag;
+		}
 
 		memset(&ma_iocb[idx], 0, sizeof(ma_iocb[idx]));
 		io_prep_pwrite(&ma_iocb[idx], fd, block.buffer, bytes, offset);
@@ -178,6 +182,10 @@ TempFileManager::Read(SortReduceTypes::File* file, off_t offset, size_t bytes, v
 		size_t frag = bytes & 0x1ff;
 		if ( frag != 0 ) {
 			bytes = bytes-frag + 0x200;
+		}
+		off_t ofrag = offset & 0x1ff;
+		if ( ofrag != 0 ) {
+			offset = bytes-frag;
 		}
 
 		//memset(buffer, 0xcc, bytes);
