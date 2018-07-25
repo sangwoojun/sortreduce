@@ -125,7 +125,9 @@ SortReduceReducer::StreamMergeReducer<K,V>::PutFile(SortReduceTypes::File* file)
 	
 	mvq_ready_blocks.push_back(std::queue<SortReduceTypes::Block>());
 
-	FileReadReq(cur_count);
+	//FileReadReq(cur_count);
+	GetNextFileBlock(cur_count);
+
 }
 
 // This method is not thread-safe!
@@ -173,7 +175,10 @@ SortReduceTypes::Block
 SortReduceReducer::StreamMergeReducer<K,V>::GetNextFileBlock(int src) {
 	SortReduceTypes::Block ret;
 	ret.valid = false;
-	if ( !mv_input_sources[src].from_file ) return ret;
+	if ( !mv_input_sources[src].from_file ) {
+		fprintf( stderr, "GetNextFileBlock called on in-memory block\n" );
+		return ret;
+	}
 	
 	m_mutex.lock();
 
@@ -184,6 +189,11 @@ SortReduceReducer::StreamMergeReducer<K,V>::GetNextFileBlock(int src) {
 		m_total_reads_inflight -= read_done;
 
 		for ( int i = 0; i < read_done; i++ ) {
+			if ( mq_read_request_order.empty() ) {
+				fprintf(stderr, "mq_read_request_order empty! %s:%d\n", __FILE__, __LINE__ );
+				exit(1);
+			}
+
 			std::tuple<int,SortReduceTypes::Block> req = mq_read_request_order.front();
 			mq_read_request_order.pop();
 			int dst = std::get<0>(req);
@@ -289,7 +299,7 @@ void
 SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::Start() {
 	this->m_started = true;
 
-	//printf( "StreamMergeReducer_SinglePriority started with %lu inputs\n", mv_input_sources.size() ); fflush(stdout);
+	printf( "StreamMergeReducer_SinglePriority started with %lu inputs\n", this->mv_input_sources.size() ); fflush(stdout);
 
 	m_worker_thread = std::thread(&StreamMergeReducer_SinglePriority<K,V>::WorkerThread,this);
 }
@@ -312,7 +322,8 @@ SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::WorkerThread() {
 
 	for ( int i = 0; i < source_count; i++ ) {
 		if ( this->mv_input_sources[i].from_file ) {
-			this->FileReadReq(i);
+			//this->FileReadReq(i);
+			this->GetNextFileBlock(i);
 		}
 	}
 	for ( int i = 0; i < source_count; i++ ) {
@@ -475,6 +486,7 @@ SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::WorkerThread() {
 	duration_milli = std::chrono::duration_cast<std::chrono::milliseconds> (now-last_time);
 
 	printf( "StreamMergeReducer_SinglePriority %d elapsed: %lu ms\n", source_count, duration_milli.count() );
+	sleep(1);
 }
 
 template class SortReduceReducer::StreamMergeReducer<uint32_t, uint32_t>;

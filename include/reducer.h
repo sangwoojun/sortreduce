@@ -57,7 +57,7 @@ namespace SortReduceReducer {
 		int m_total_reads_inflight = 0;
 	
 		std::vector<std::queue<SortReduceTypes::Block>> mvq_ready_blocks;
-		const int m_file_reads_inflight_target = 4;
+		const int m_file_reads_inflight_target = 3;
 
 		void FileReadReq(int src);
 		SortReduceTypes::Block GetNextFileBlock(int src);
