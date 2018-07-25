@@ -21,14 +21,14 @@
 
 class TempFileManager {
 public:
-	TempFileManager(std::string path);
+	TempFileManager(std::string path, bool verbose = false);
 	~TempFileManager();
 
 	//SortReduceTypes::File* CreateFile(void* buffer, size_t bytes, size_t valid_bytes, bool free_buffer_after_done);
 	SortReduceTypes::File* CreateEmptyFile(std::string filename = "");
 	//bool Write(int fd, void* buffer, size_t bytes, size_t valid_bytes, off_t offset, bool free_buffer_after_done);
-	bool Write(SortReduceTypes::File* file, SortReduceTypes::Block block, off_t offset);
-	int Read(SortReduceTypes::File* file, off_t offset, size_t bytes, void* buffer);
+	bool Write(SortReduceTypes::File* file, SortReduceTypes::Block block, size_t offset);
+	int Read(SortReduceTypes::File* file, size_t offset, size_t bytes, void* buffer);
 	int ReadStatus(bool clear);
 	//int PeekReadStatus();
 
@@ -40,6 +40,7 @@ public:
 	void CheckDone();
 	size_t BytesInFlight() { return m_writing_bytes; };
 private:
+	bool m_verbose;
 	std::mutex m_mutex;
 
 	std::string m_base_path;

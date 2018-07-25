@@ -145,7 +145,7 @@ SortReduceReducer::StreamMergeReducer<K,V>::FileReadReq(int src) {
 			block = mp_buffer_manager->GetBuffer();
 		}
 
-	
+
 		if ( block.bytes + mv_file_offset[src] <= file->bytes ) {
 			block.valid_bytes = block.bytes;
 		} else {
@@ -275,14 +275,14 @@ SortReduceReducer::ReduceInBuffer(V (*update)(V,V), void* buffer, size_t bytes) 
 */
 
 template <class K, class V>
-SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::StreamMergeReducer_SinglePriority(V (*update)(V,V), std::string temp_directory, std::string filename) : SortReduceReducer::StreamMergeReducer<K,V>() {
+SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::StreamMergeReducer_SinglePriority(V (*update)(V,V), std::string temp_directory, std::string filename, bool verbose) : SortReduceReducer::StreamMergeReducer<K,V>() {
 	this->m_done = false;
 	this->m_started = false;
 
 	//this->ms_temp_directory = temp_directory;
 	this->mp_update = update;
 
-	this->mp_temp_file_manager = new TempFileManager(temp_directory);
+	this->mp_temp_file_manager = new TempFileManager(temp_directory, verbose);
 	
 	this->m_out_file = this->mp_temp_file_manager->CreateEmptyFile(filename);
 }
@@ -486,7 +486,6 @@ SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::WorkerThread() {
 	duration_milli = std::chrono::duration_cast<std::chrono::milliseconds> (now-last_time);
 
 	printf( "StreamMergeReducer_SinglePriority %d elapsed: %lu ms\n", source_count, duration_milli.count() );
-	sleep(1);
 }
 
 template class SortReduceReducer::StreamMergeReducer<uint32_t, uint32_t>;

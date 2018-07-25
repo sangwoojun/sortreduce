@@ -79,7 +79,7 @@ namespace SortReduceReducer {
 	template <class K, class V>
 	class StreamMergeReducer_SinglePriority : public StreamMergeReducer<K,V> {
 	public:
-		StreamMergeReducer_SinglePriority(V (*update)(V,V), std::string temp_directory, std::string filename = "");
+		StreamMergeReducer_SinglePriority(V (*update)(V,V), std::string temp_directory, std::string filename = "", bool verbose = false);
 		~StreamMergeReducer_SinglePriority();
 
 		//void PutBlock(SortReduceTypes::Block block);

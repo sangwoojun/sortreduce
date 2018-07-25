@@ -2,7 +2,8 @@
 
 
 
-TempFileManager::TempFileManager(std::string path ) {
+TempFileManager::TempFileManager(std::string path, bool verbose) {
+	m_verbose = verbose;
 	m_base_path = "./";
 	m_read_ready_count = 0;
 	
@@ -106,7 +107,7 @@ TempFileManager::Write(int fd, void* buffer, size_t bytes, size_t valid_bytes, o
 */
 
 bool 
-TempFileManager::Write(SortReduceTypes::File* file, SortReduceTypes::Block block, off_t offset) {
+TempFileManager::Write(SortReduceTypes::File* file, SortReduceTypes::Block block, size_t offset) {
 	bool ret = false;
 
 	int fd = file->fd;
@@ -125,7 +126,7 @@ TempFileManager::Write(SortReduceTypes::File* file, SortReduceTypes::Block block
 		if ( frag != 0 ) {
 			bytes = bytes - frag + 0x200;
 		}
-		off_t ofrag = offset & 0x1ff;
+		size_t ofrag = offset & 0x1ff;
 		if ( ofrag != 0 ) {
 			offset = bytes-frag;
 		}
@@ -148,6 +149,10 @@ TempFileManager::Write(SortReduceTypes::File* file, SortReduceTypes::Block block
 		int ret_count = io_submit(m_io_ctx, 1, &iocbs);
 		if ( ret_count > 0 ) {
 			ret = true;
+			if ( m_verbose ) {
+				printf( "Writing file %lx size %lx (%lx) -- %lu success: %s\n", offset, block.valid_bytes, bytes, mq_free_bufs.size(), ret?"yes":"no" );
+				fflush(stdout);
+			}
 		} else {
 			mq_free_bufs.push(idx);
 		}
@@ -155,7 +160,6 @@ TempFileManager::Write(SortReduceTypes::File* file, SortReduceTypes::Block block
 
 	m_mutex.unlock();
 	
-	//printf( "Writing file %lx size %lx (%lx) -- %lu success: %s\n", offset, block.valid_bytes, bytes, mq_free_bufs.size(), ret?"yes":"no" ); fflush(stdout);
 
 	return ret;
 }
@@ -165,7 +169,7 @@ Returns -1 on fail
 Returns tag on success
 **/
 int 
-TempFileManager::Read(SortReduceTypes::File* file, off_t offset, size_t bytes, void* buffer) {
+TempFileManager::Read(SortReduceTypes::File* file, size_t offset, size_t bytes, void* buffer) {
 	int ret = -1;
 
 	int fd = file->fd;
@@ -183,7 +187,7 @@ TempFileManager::Read(SortReduceTypes::File* file, off_t offset, size_t bytes, v
 		if ( frag != 0 ) {
 			bytes = bytes-frag + 0x200;
 		}
-		off_t ofrag = offset & 0x1ff;
+		size_t ofrag = offset & 0x1ff;
 		if ( ofrag != 0 ) {
 			offset = bytes-frag;
 		}
@@ -208,7 +212,11 @@ TempFileManager::Read(SortReduceTypes::File* file, off_t offset, size_t bytes, v
 			ret = idx;
 			mq_read_order_idx.push(idx);
 
-			//printf( "Reading file %lx size %lx -- %lu success: %d\n", offset, bytes, mq_free_bufs.size(), ret ); fflush(stdout);
+			if ( m_verbose ) {
+				printf( "Reading file %lx size %lx -- %lu success: %d\n", offset, bytes, mq_free_bufs.size(), ret ); 
+				fflush(stdout);
+			}
+
 		} else {
 			mq_free_bufs.push(idx);
 		}
