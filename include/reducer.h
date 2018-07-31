@@ -24,7 +24,7 @@ namespace SortReduceReducer {
 		void PutFile(SortReduceTypes::File* file);
 		virtual void Start() = 0;
 		bool IsDone() { return m_done; };
-		virtual SortReduceTypes::File* GetOutFile() = 0;
+		SortReduceTypes::File* GetOutFile() {return this->m_out_file; };
 	
 	protected: //TODO eventually must become private
 		typedef struct {
@@ -85,7 +85,6 @@ namespace SortReduceReducer {
 		//void PutBlock(SortReduceTypes::Block block);
 		//void PutFile(SortReduceTypes::File* file);
 		void Start();
-		SortReduceTypes::File* GetOutFile() {return this->m_out_file; };
 	private:
 		typedef struct {
 			K key;
@@ -106,6 +105,23 @@ namespace SortReduceReducer {
 		std::mutex m_mutex;
 
 	};
+
+
+	template <class K, class V>
+	class StreamMergeReducer_MultiTree : public StreamMergeReducer<K,V> {
+	public:
+		StreamMergeReducer_MultiTree(V (*update)(V,V), std::string temp_directory, std::string filename = "", bool verbose = false);
+		~StreamMergeReducer_MultiTree();
+
+		void Start();
+	private:
+
+		//void WorkerThread();
+		//std::thread m_worker_thread;
+		//std::mutex m_mutex;
+
+	};
+
 
 }
 

@@ -488,6 +488,45 @@ SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::WorkerThread() {
 	printf( "StreamMergeReducer_SinglePriority %d elapsed: %lu ms\n", source_count, duration_milli.count() );
 }
 
+
+
+
+template <class K, class V>
+SortReduceReducer::StreamMergeReducer_MultiTree<K,V>::StreamMergeReducer_MultiTree(V (*update)(V,V), std::string temp_directory, std::string filename, bool verbose) : SortReduceReducer::StreamMergeReducer<K,V>() {
+	this->m_done = false;
+	this->m_started = false;
+
+	//this->ms_temp_directory = temp_directory;
+	this->mp_update = update;
+
+	this->mp_temp_file_manager = new TempFileManager(temp_directory, verbose);
+	
+	this->m_out_file = this->mp_temp_file_manager->CreateEmptyFile(filename);
+}
+
+template <class K, class V>
+SortReduceReducer::StreamMergeReducer_MultiTree<K,V>::~StreamMergeReducer_MultiTree() {
+	//m_worker_thread.join();
+	delete this->mp_temp_file_manager;
+	//printf( "Worker thread joined\n" );
+}
+
+template <class K, class V>
+void
+SortReduceReducer::StreamMergeReducer_MultiTree<K,V>::Start() {
+	this->m_started = true;
+
+	//printf( "StreamMergeReducer_SinglePriority started with %lu inputs\n", this->mv_input_sources.size() ); fflush(stdout);
+
+	//m_worker_thread = std::thread(&StreamMergeReducer_SinglePriority<K,V>::WorkerThread,this);
+}
+
+
+
+
+
+
+
 template class SortReduceReducer::StreamMergeReducer<uint32_t, uint32_t>;
 template class SortReduceReducer::StreamMergeReducer<uint32_t, uint64_t>;
 template class SortReduceReducer::StreamMergeReducer<uint64_t, uint32_t>;
