@@ -454,7 +454,7 @@ SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::WorkerThread() {
 				}
 			} else {
 				SortReduceTypes::File* file = this->mv_input_sources[src].file;
-				this->mp_temp_file_manager->Close(file->fd);
+				this->mp_temp_file_manager->Close(file);
 				//printf( "File closed! %2d\n", src ); fflush(stdout);
 			}
 

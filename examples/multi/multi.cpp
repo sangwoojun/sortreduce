@@ -69,19 +69,20 @@ InputGenerator<K,V>::WorkerThread() {
 int main(int argc, char** argv) {
 	srand(time(0));
 
-	if ( argc < 3 ) {
-		fprintf(stderr, "usage: %s thread_count element_count\n", argv[0] );
+	if ( argc < 4 ) {
+		fprintf(stderr, "usage: %s directory thread_count element_count\n", argv[0] );
 		exit(1);
 	}
 
-	int thread_count = atoi(argv[1]);
-	uint64_t element_count = strtoull(argv[2], NULL, 10);
+	char* tmp_dir = argv[1];
+	int thread_count = atoi(argv[2]);
+	uint64_t element_count = strtoull(argv[3], NULL, 10);
 
 	printf( "Element count: %lu\n", element_count );
 
 
 
-	SortReduceTypes::Config<uint64_t,uint32_t>* conf = new SortReduceTypes::Config<uint64_t,uint32_t>("/mnt/md0/wjun/", "output.dat", 16);
+	SortReduceTypes::Config<uint64_t,uint32_t>* conf = new SortReduceTypes::Config<uint64_t,uint32_t>(tmp_dir, "output.dat", 16);
 	conf->SetUpdateFunction(&update_function);
 	conf->SetMaxBytesInFlight(1024*1024*1024); //1GB
 	//conf->SetManagedBufferSize(1024*1024*32, 64); // 2 GB
