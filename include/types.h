@@ -29,6 +29,7 @@ namespace SortReduceTypes {
 	public:
 		int fd;
 		size_t bytes;
+		std::string path;
 	};
 	class CompareFileSize {
 	public:

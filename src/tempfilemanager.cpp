@@ -1,6 +1,8 @@
 #include "tempfilemanager.h"
 
 
+uint32_t
+TempFileManager::ms_filename_idx = 0;
 
 TempFileManager::TempFileManager(std::string path, bool verbose) {
 	m_verbose = verbose;
@@ -49,18 +51,33 @@ TempFileManager::CreateFile(void* buffer, size_t bytes, size_t valid_bytes, bool
 SortReduceTypes::File*
 TempFileManager::CreateEmptyFile(std::string filename) {
 	//printf( "Creating empty file\n" ); fflush(stdout);
+	
+	m_mutex.lock();
+	
+	// FIXME
+	char tmp_filename[128];
+	if ( m_base_path.length() + filename.length() + 16 >= 128 ) {
+		fprintf(stderr, "temp file path too long! FIXME %s:%d\n", __FILE__, __LINE__ );
+	}
 
 	int fd = -1;
 	if ( filename == "" ) {
-		fd = open(m_base_path.c_str(), O_RDWR|O_DIRECT|O_TMPFILE, S_IRUSR|S_IWUSR);
+		sprintf(tmp_filename, "%s/tmp_%09u.bin", m_base_path.c_str(), ms_filename_idx);
+		ms_filename_idx++;
+		fd = open(tmp_filename, O_RDWR|O_DIRECT|O_CREAT, S_IRUSR|S_IWUSR);
 	} else {
-		fd = open((m_base_path+filename).c_str(), O_RDWR|O_DIRECT|O_CREAT, S_IRUSR|S_IWUSR);
+		sprintf(tmp_filename, "%s/%s", m_base_path.c_str(), filename.c_str());
+		fd = open(tmp_filename, O_RDWR|O_DIRECT|O_CREAT, S_IRUSR|S_IWUSR);
 	}
+	
+	m_mutex.unlock();
 
 
 	SortReduceTypes::File* ret = new SortReduceTypes::File();
 	ret->fd = fd;
 	ret->bytes = 0;
+	ret->path = tmp_filename;
+
 
 	return ret;
 }
@@ -316,10 +333,10 @@ TempFileManager::CountFreeBuffers() {
 }
 
 /**
-Closing O_TMPFILE automatically deletes it
 **/
 void
-TempFileManager::Close(int fd) {
-	close(fd);
+TempFileManager::Close(SortReduceTypes::File* file) {
+	unlink(file->path.c_str());
+	close(file->fd);
 }
 

@@ -5,6 +5,7 @@
 #include <queue>
 #include <map>
 #include <mutex>
+#include <atomic>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -32,7 +33,7 @@ public:
 	int ReadStatus(bool clear);
 	//int PeekReadStatus();
 
-	void Close(int fd);
+	void Close(SortReduceTypes::File* file);
 
 	int CountInFlight();
 	int CountFreeBuffers();
@@ -44,6 +45,8 @@ private:
 	std::mutex m_mutex;
 
 	std::string m_base_path;
+
+	static uint32_t ms_filename_idx;
 
 	io_context_t m_io_ctx;
 	struct io_event ma_events[AIO_DEPTH];
