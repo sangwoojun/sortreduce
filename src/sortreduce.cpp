@@ -219,7 +219,9 @@ SortReduce<K,V>::ManagerThread() {
 	size_t max_storage_bytes = m_config->max_storage_allocatd_bytes;
 
 	int statvfs_ret =  statvfs(m_config->temporary_directory.c_str(), &fs_stat);
-	size_t fs_avail_bytes = fs_stat.f_bavail * fs_stat.f_bsize;
+
+	//FIXME padding
+	size_t fs_avail_bytes = fs_stat.f_bavail * fs_stat.f_bsize * 0.9;
 	if (m_config->max_storage_allocatd_bytes == 0 && ( statvfs_ret != 0 || fs_avail_bytes == 0 ) ) {
 		fprintf(stderr, "statvfs returns invalid storage capacity! Set storage usage manually via Config\n" );
 		exit(1);
@@ -235,7 +237,7 @@ SortReduce<K,V>::ManagerThread() {
 
 		duration_milli = std::chrono::duration_cast<std::chrono::milliseconds> (now-last_time);
 
-		if ( !m_done_inmem && duration_milli.count() > 500 ) {
+		if ( !m_done_inmem && !m_reduce_phase && duration_milli.count() > 500 ) {
 			last_time = now;
 			AlignedBufferManager* buffer_manager = AlignedBufferManager::GetInstance(0);
 			int free_cnt = buffer_manager->GetFreeCount();
@@ -298,8 +300,8 @@ SortReduce<K,V>::ManagerThread() {
 			if ( m_file_priority_queue.size() <= reducer_from_storage_fan_in_max ) {
 				required_space_safe = cur_storage_total_bytes;
 			}
-			if ( max_storage_bytes - cur_storage_total_bytes < required_space_safe ) {
-				printf( "SortReduce entering reduce pbase %lu\n", max_storage_bytes - cur_storage_total_bytes );
+			if ( !m_done_inmem && max_storage_bytes - cur_storage_total_bytes < required_space_safe ) {
+				printf( "SortReduce entering reduce phase %lu\n", max_storage_bytes - cur_storage_total_bytes );
 				m_reduce_phase = true;
 				while ( mp_block_sorter->GetThreadCount() > 0 ) {
 					mp_block_sorter->KillThread();
@@ -373,7 +375,7 @@ SortReduce<K,V>::ManagerThread() {
 
 				if ( m_reduce_phase && mv_stream_mergers_from_storage.empty() ) {
 					m_reduce_phase = false;
-					printf( "SortReduce exiting reduce pbase %lu\n", max_storage_bytes - cur_storage_total_bytes );
+					printf( "SortReduce exiting reduce phase %lu\n", max_storage_bytes - cur_storage_total_bytes );
 				}
 
 			} else {
