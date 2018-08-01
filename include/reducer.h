@@ -25,6 +25,9 @@ namespace SortReduceReducer {
 		virtual void Start() = 0;
 		bool IsDone() { return m_done; };
 		SortReduceTypes::File* GetOutFile() {return this->m_out_file; };
+
+		size_t GetInputFileBytes() { return this->m_input_file_bytes; };
+
 	
 	protected: //TODO eventually must become private
 		typedef struct {
@@ -64,6 +67,8 @@ namespace SortReduceReducer {
 
 		bool m_started;
 		bool m_done;
+
+		size_t m_input_file_bytes = 0;
 
 	protected:
 		static K DecodeKey(void* buffer, size_t offset);

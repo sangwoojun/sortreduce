@@ -136,7 +136,7 @@ BlockSorter<K,V>::SpawnThread() {
 template <class K, class V>
 void
 BlockSorter<K,V>::KillThread() {
-	if ( mv_sorter_threads.size() > 1 ) {
+	if ( mv_sorter_threads.size() > 0 ) {
 		mv_sorter_threads[mv_sorter_threads.size()-1]->Exit();
 		mv_sorter_threads.pop_back();
 	}

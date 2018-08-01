@@ -87,6 +87,7 @@ int main(int argc, char** argv) {
 	conf->SetMaxBytesInFlight(1024*1024*1024); //1GB
 	//conf->SetManagedBufferSize(1024*1024*32, 64); // 2 GB
 	conf->SetManagedBufferSize(1024*1024*32, 64); // 4 GB
+	conf->SetMaxStorageBytes(1024l*1024*1024*16);
 
 	SortReduce<uint64_t,uint32_t>* sr = new SortReduce<uint64_t,uint32_t>(conf);
 

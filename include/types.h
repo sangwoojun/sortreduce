@@ -52,6 +52,7 @@ namespace SortReduceTypes {
 		//void SetUpdateFunction(uint64_t (*update64)(uint64_t,uint64_t) );
 		void SetManagedBufferSize(size_t buffer_size, int buffer_count);
 		void SetMaxBytesInFlight(size_t bytes);
+		void SetMaxStorageBytes(size_t bytes) {max_storage_allocatd_bytes = bytes;};
 	//private:
 
 		std::string temporary_directory;
@@ -65,6 +66,8 @@ namespace SortReduceTypes {
 		int buffer_count;
 
 		size_t max_bytes_inflight;
+
+		size_t max_storage_allocatd_bytes = 0;
 	};
 
 	class Status {

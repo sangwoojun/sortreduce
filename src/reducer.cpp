@@ -125,6 +125,8 @@ SortReduceReducer::StreamMergeReducer<K,V>::PutFile(SortReduceTypes::File* file)
 	
 	mvq_ready_blocks.push_back(std::queue<SortReduceTypes::Block>());
 
+	m_input_file_bytes += file->bytes;
+
 	//FileReadReq(cur_count);
 	GetNextFileBlock(cur_count);
 

@@ -19,6 +19,7 @@ SortReduce<K,V>::SortReduce(SortReduceTypes::Config<K,V> *config) {
 	this->m_done_input_main = false;
 	this->m_done_inmem = false;
 	this->m_done_external = false;
+	this->m_reduce_phase = false;
 
 	this->m_cur_update_block.valid = false;
 	this->m_cur_update_block.bytes = 0;
@@ -200,6 +201,7 @@ SortReduce<K,V>::ManagerThread() {
 
 	const size_t reducer_from_mem_fan_in = 16;
 	const size_t reducer_from_mem_fan_in_max = 16;
+	const size_t reducer_from_storage_fan_in_max = 32;
 	int reducer_from_mem_max_count = 1;
 	
 	std::chrono::high_resolution_clock::time_point last_time;
@@ -210,6 +212,19 @@ SortReduce<K,V>::ManagerThread() {
 	uint64_t total_blocks_sorted = 0;
 	uint64_t total_bytes_file_from_mem = 0;
 	uint64_t total_bytes_file_from_storage = 0;
+
+	struct statvfs fs_stat;
+
+	size_t cur_storage_total_bytes = 0;
+	size_t max_storage_bytes = m_config->max_storage_allocatd_bytes;
+
+	int statvfs_ret =  statvfs(m_config->temporary_directory.c_str(), &fs_stat);
+	size_t fs_avail_bytes = fs_stat.f_bavail * fs_stat.f_bsize;
+	if (m_config->max_storage_allocatd_bytes == 0 && ( statvfs_ret != 0 || fs_avail_bytes == 0 ) ) {
+		fprintf(stderr, "statvfs returns invalid storage capacity! Set storage usage manually via Config\n" );
+		exit(1);
+	}
+	if ( max_storage_bytes == 0 && fs_avail_bytes > 0 ) max_storage_bytes = fs_avail_bytes;
 
 	while (true) {
 		//sleep(1);
@@ -277,10 +292,25 @@ SortReduce<K,V>::ManagerThread() {
 
 		}
 
+		if ( m_reduce_phase == false && m_file_priority_queue.size() > 0 ) {
+			//FIXME
+			size_t required_space_safe = m_file_priority_queue.top()->bytes*reducer_from_storage_fan_in_max;
+			if ( m_file_priority_queue.size() <= reducer_from_storage_fan_in_max ) {
+				required_space_safe = cur_storage_total_bytes;
+			}
+			if ( max_storage_bytes - cur_storage_total_bytes < required_space_safe ) {
+				printf( "SortReduce entering reduce pbase %lu\n", max_storage_bytes - cur_storage_total_bytes );
+				m_reduce_phase = true;
+				while ( mp_block_sorter->GetThreadCount() > 0 ) {
+					mp_block_sorter->KillThread();
+				}
+			}
+		}
+
 		// if GetOutBlock() returns more than ...say 16, spawn a merge-reducer
 		size_t temp_file_count = m_file_priority_queue.size();
-		if ( m_done_inmem && 
-			((m_done_inmem&&temp_file_count>1&&mv_stream_mergers_from_storage.empty()) || 
+		if ( (m_done_inmem||m_reduce_phase) && 
+			(((m_done_inmem||m_reduce_phase)&&temp_file_count>1&&mv_stream_mergers_from_storage.empty()) || 
 			temp_file_count >= 16) 
 
 			//((m_done_inmem&&temp_file_count>1) || temp_file_count >= 16) 
@@ -336,7 +366,15 @@ SortReduce<K,V>::ManagerThread() {
 				total_bytes_file_from_storage += reduced_file->bytes;
 
 				mv_stream_mergers_from_storage.erase(mv_stream_mergers_from_storage.begin() + i);
+
+				cur_storage_total_bytes += reduced_file->bytes;
+				cur_storage_total_bytes -= reducer->GetInputFileBytes();
 				delete reducer;
+
+				if ( m_reduce_phase && mv_stream_mergers_from_storage.empty() ) {
+					m_reduce_phase = false;
+					printf( "SortReduce exiting reduce pbase %lu\n", max_storage_bytes - cur_storage_total_bytes );
+				}
 
 			} else {
 				i++;
@@ -344,7 +382,7 @@ SortReduce<K,V>::ManagerThread() {
 		}
 
 		size_t sorted_blocks_cnt = mp_block_sorter->GetOutBlockCount();
-		if ( ((m_done_input && sorted_blocks_cnt>0&&mv_stream_mergers_from_mem.empty()) || sorted_blocks_cnt >= reducer_from_mem_fan_in) 
+		if ( !m_reduce_phase && ((m_done_input && sorted_blocks_cnt>0&&mv_stream_mergers_from_mem.empty()) || sorted_blocks_cnt >= reducer_from_mem_fan_in) 
 			&& mv_stream_mergers_from_mem.size() < reducer_from_mem_max_count ) {
 
 			SortReduceReducer::StreamMergeReducer<K,V>* merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory);
@@ -376,6 +414,8 @@ SortReduce<K,V>::ManagerThread() {
 
 				mv_stream_mergers_from_mem.erase(mv_stream_mergers_from_mem.begin() + i);
 				delete reducer;
+
+				cur_storage_total_bytes += reduced_file->bytes;
 			} else {
 				i++;
 			}
@@ -385,10 +425,14 @@ SortReduce<K,V>::ManagerThread() {
 			&& mv_stream_mergers_from_mem.empty() ) {
 			m_done_inmem = true;
 			printf( "Im-memory sort done!\n" ); fflush(stdout);
+				
+			while ( mp_block_sorter->GetThreadCount() > 0 ) {
+				mp_block_sorter->KillThread();
+			}
 			//TODO delete mp_block_sorter
 		}
 
-		if ( !m_done_external && m_done_input && m_done_inmem && 
+		if ( !m_done_external && m_done_input && m_done_inmem && !m_reduce_phase &&
 			m_file_priority_queue.size() == 1 && mv_stream_mergers_from_storage.empty() ) {
 
 			mp_file_kv_reader = new SortReduceUtils::FileKvReader<K,V>(m_file_priority_queue.top(), m_config);

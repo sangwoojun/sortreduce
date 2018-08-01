@@ -12,6 +12,8 @@
 
 #include <time.h>
 
+#include <sys/statvfs.h>
+
 #include <queue>
 #include <string>
 #include <thread>
@@ -93,6 +95,8 @@ private:
 	bool m_done_input_main;
 	bool m_done_inmem;
 	bool m_done_external;
+
+	bool m_reduce_phase;
 
 	std::vector<SortReduceReducer::StreamMergeReducer<K,V>*> mv_stream_mergers_from_mem;
 	std::vector<SortReduceReducer::StreamMergeReducer<K,V>*> mv_stream_mergers_from_storage;
