@@ -18,6 +18,7 @@ namespace SortReduceTypes {
 		int managed_idx = -1;
 		bool managed = false;
 
+		//when used, do not use buffer and bytes
 		bool last = false;
 
 		// Used to indicate null values (e.g., return from empty queue)

@@ -69,6 +69,11 @@ namespace SortReduceReducer {
 		bool m_done;
 
 		size_t m_input_file_bytes = 0;
+		
+		typedef struct {
+			K key;
+			V val;
+		} KvPair;
 
 	protected:
 		static K DecodeKey(void* buffer, size_t offset);
@@ -76,6 +81,48 @@ namespace SortReduceReducer {
 		static void EncodeKvp(void* buffer, size_t offset, K key, V val);
 		static void EncodeKey(void* buffer, size_t offset, K key);
 		static void EncodeVal(void* buffer, size_t offset, V val);
+
+		class BlockSourceNode {
+		public:
+			BlockSourceNode(size_t block_bytes, int block_count);
+			SortReduceTypes::Block GetBlock();
+			void ReturnBlock(SortReduceTypes::Block block);
+		protected:
+			std::queue<int> mq_ready_idx;
+			std::queue<int> mq_free_idx;
+			std::vector<SortReduceTypes::Block> ma_blocks;
+			size_t m_out_offset;
+
+			void EmitKvPair(K key, V val);
+			/**
+			Flushes, and emits a block with "last" flag set.
+			NOTE: "last" block needs to be returned as well!
+			**/
+			void FinishEmit();
+
+
+			std::mutex m_mutex;
+
+		};
+		static KvPair DecodeKvPair(SortReduceTypes::Block* block, size_t* p_off, BlockSourceNode* src);
+
+
+		class ReducerNode {
+		};
+
+		class MergerNode : BlockSourceNode {
+		public:
+			MergerNode(size_t block_bytes, int block_count);
+			void AddSource(BlockSourceNode* src);
+			void Start();
+		private:
+			std::thread m_worker_thread;
+			void WorkerThread2();
+			bool m_started;
+
+			std::vector<BlockSourceNode*> ma_sources;
+
+		};
 
 	private:
 		std::mutex m_mutex;
@@ -110,6 +157,8 @@ namespace SortReduceReducer {
 		std::mutex m_mutex;
 
 	};
+
+
 
 
 	template <class K, class V>
