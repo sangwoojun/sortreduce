@@ -150,7 +150,7 @@ SortReduce<K,V>::Finish() {
 }
 
 template <class K, class V>
-std::tuple<K,V,bool>
+inline std::tuple<K,V,bool>
 SortReduce<K,V>::Next() {
 	if ( mp_file_kv_reader == NULL ) {
 		return std::make_tuple(0,0,false);
@@ -511,7 +511,7 @@ SortReduce<K,V>::IoEndpoint::Finish() {
 }
 
 template<class K, class V>
-std::tuple<K,V,bool> 
+inline std::tuple<K,V,bool> 
 SortReduce<K,V>::IoEndpoint::Next() {
 	std::tuple<K,V,bool> ret;
 

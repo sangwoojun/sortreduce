@@ -8,8 +8,8 @@
 #include <string>
 #include <thread>
 
-#ifdef KVTYPES
-#define TEMPLATE_EXPLICIT_INSTANTIATION1(X) template class X<KVTYPES>;
+#ifdef KVTYPES1
+#define TEMPLATE_EXPLICIT_INSTANTIATION1(X) template class X<KVTYPES1>;
 #else 
 #define TEMPLATE_EXPLICIT_INSTANTIATION1(X) ;
 #endif
@@ -101,6 +101,12 @@ namespace SortReduceTypes {
 		size_t max_bytes_inflight;
 
 		size_t max_storage_allocatd_bytes = 0;
+	};
+
+	template <class K, class V>
+	struct KvPair {
+		K key;
+		V val;
 	};
 
 	class Status {

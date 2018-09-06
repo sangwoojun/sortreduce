@@ -53,3 +53,4 @@ SortReduceTypes::Status::Status() {
 }
 
 TEMPLATE_EXPLICIT_INSTANTIATION(SortReduceTypes::Config)
+TEMPLATE_EXPLICIT_INSTANTIATION(SortReduceTypes::KvPair)

@@ -40,15 +40,17 @@ SortReduceUtils::FileKvReader<K,V>::Seek(size_t idx) {
 
 
 template <class K, class V>
-std::tuple<K,V, bool> 
+inline std::tuple<K,V, bool> 
 SortReduceUtils::FileKvReader<K,V>::Next() {
 	if ( m_offset >= m_file_size ) return std::make_tuple(0,0,false);
 	
 	K key = 0;
 	V val = 0;
-	fread(&key, sizeof(K), 1, mp_fp);
-	fread(&val, sizeof(V), 1, mp_fp);
+	int kr = fread(&key, sizeof(K), 1, mp_fp);
+	int vr = fread(&val, sizeof(V), 1, mp_fp);
 	m_offset += sizeof(K)+sizeof(V);
+	
+	if ( kr + vr < 2 ) return std::make_tuple(0,0,false);
 
 	return std::make_tuple(key,val,true);
 
