@@ -251,32 +251,6 @@ SortReduceReducer::StreamMergeReducer<K,V>::EncodeVal(void* buffer, size_t offse
 	*(V*)(((uint8_t*)buffer)+offset) = val;
 }
 
-/*
-template <class K, class V>
-size_t 
-SortReduceReducer::ReduceInBuffer(V (*update)(V,V), void* buffer, size_t bytes) {
-	printf( "Reducing!! %s:%d\n", __FILE__, __LINE__ );
-	size_t key_bytes = sizeof(K);
-	size_t val_bytes = sizeof(V);
-	size_t in_offset = 0;
-	size_t out_offset = key_bytes+val_bytes;
-	while ( in_offset < bytes ) {
-		K in_key = *(K*)(((uint8_t*)buffer)+in_offset);
-		K out_key = *(K*)(((uint8_t*)buffer)+out_offset);
-		if ( in_key == out_key ) {
-			V* p_in_val = (V*)(((uint8_t*)buffer)+in_offset+key_bytes);
-			V in_val = *p_in_val;
-			V out_val = *(V*)(((uint8_t*)buffer)+out_offset+key_bytes);
-			*p_in_val = update(in_val,out_val);
-		} else {
-			out_offset += key_bytes+val_bytes;
-		}
-		in_offset += key_bytes+val_bytes;
-	}
-	return out_offset;
-}
-*/
-
 template <class K, class V>
 inline typename SortReduceReducer::StreamMergeReducer<K,V>::KvPair 
 SortReduceReducer::StreamMergeReducer<K,V>::DecodeKvPair(SortReduceTypes::Block* p_block, size_t* p_off, BlockSourceNode* src) {
@@ -296,6 +270,8 @@ SortReduceReducer::StreamMergeReducer<K,V>::DecodeKvPair(SortReduceTypes::Block*
 		*p_off += sizeof(K)+sizeof(V);
 
 		if ( avail == sizeof(K)+sizeof(V) ) {
+			src->ReturnBlock(*p_block);
+
 			SortReduceTypes::Block block;
 			block.valid = false;
 			while ( block.valid == false ) {
@@ -309,6 +285,8 @@ SortReduceReducer::StreamMergeReducer<K,V>::DecodeKvPair(SortReduceTypes::Block*
 		size_t debt = sizeof(K) + sizeof(V) - avail;
 		memcpy(&kvp.val, ((uint8_t*)buffer+off), avail-sizeof(K));
 
+		src->ReturnBlock(*p_block);
+
 		SortReduceTypes::Block block;
 		block.valid = false;
 		while ( block.valid == false ) {
@@ -321,6 +299,8 @@ SortReduceReducer::StreamMergeReducer<K,V>::DecodeKvPair(SortReduceTypes::Block*
 	} else {
 		int debt = sizeof(K) - avail;
 		memcpy(&kvp.key, ((uint8_t*)buffer+off), avail);
+			
+		src->ReturnBlock(*p_block);
 
 		SortReduceTypes::Block block;
 		block.valid = false;
@@ -560,8 +540,22 @@ SortReduceReducer::StreamMergeReducer<K,V>::MergerNode::WorkerThread2() {
 		kvp1 = DecodeKvPair(&cur_blocks[1], &in_off1, ma_sources[1]);
 		this->EmitKvPair(kvp1.key, kvp1.val);
 	}
+	ma_sources[0]->ReturnBlock(cur_blocks[0]);
+	ma_sources[1]->ReturnBlock(cur_blocks[1]);
 
 	this->FinishEmit();
+}
+
+template <class K, class V>
+SortReduceReducer::StreamMergeReducer<K,V>::ReducerNode::ReducerNode(BlockSourceNode* src, size_t block_bytes, int block_count) {
+	m_done = false;
+	m_worker_thread = std::thread(&StreamMergeReducer<K,V>::ReducerNode::WorkerThread,this);
+
+}
+
+template <class K, class V>
+void
+SortReduceReducer::StreamMergeReducer<K,V>::ReducerNode::WorkerThread() {
 }
 
 template <class K, class V>
@@ -816,22 +810,6 @@ SortReduceReducer::StreamMergeReducer_MultiTree<K,V>::Start() {
 
 
 
-
-template class SortReduceReducer::StreamMergeReducer<uint32_t, uint32_t>;
-template class SortReduceReducer::StreamMergeReducer<uint32_t, uint64_t>;
-template class SortReduceReducer::StreamMergeReducer<uint64_t, uint32_t>;
-template class SortReduceReducer::StreamMergeReducer<uint64_t, uint64_t>;
-
-template class SortReduceReducer::StreamMergeReducer_SinglePriority<uint32_t, uint32_t>;
-template class SortReduceReducer::StreamMergeReducer_SinglePriority<uint32_t, uint64_t>;
-template class SortReduceReducer::StreamMergeReducer_SinglePriority<uint64_t, uint32_t>;
-template class SortReduceReducer::StreamMergeReducer_SinglePriority<uint64_t, uint64_t>;
-
-/*
-template size_t SortReduceReducer::ReduceInBuffer<uint32_t, uint32_t>(uint32_t (*update)(uint32_t,uint32_t), void* buffer, size_t bytes);
-template size_t SortReduceReducer::ReduceInBuffer<uint32_t, uint64_t>(uint64_t (*update)(uint64_t,uint64_t), void* buffer, size_t bytes);
-template size_t SortReduceReducer::ReduceInBuffer<uint64_t, uint32_t>(uint32_t (*update)(uint32_t,uint32_t), void* buffer, size_t bytes);
-template size_t SortReduceReducer::ReduceInBuffer<uint64_t, uint64_t>(uint64_t (*update)(uint64_t,uint64_t), void* buffer, size_t bytes);
-*/
-
+TEMPLATE_EXPLICIT_INSTANTIATION(SortReduceReducer::StreamMergeReducer)
+TEMPLATE_EXPLICIT_INSTANTIATION(SortReduceReducer::StreamMergeReducer_SinglePriority)
 

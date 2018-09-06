@@ -57,9 +57,4 @@ SortReduceUtils::FileKvReader<K,V>::Next() {
 
 
 
-
-template class SortReduceUtils::FileKvReader<uint32_t, uint32_t>;
-template class SortReduceUtils::FileKvReader<uint32_t, uint64_t>;
-template class SortReduceUtils::FileKvReader<uint64_t, uint32_t>;
-template class SortReduceUtils::FileKvReader<uint64_t, uint64_t>;
-
+TEMPLATE_EXPLICIT_INSTANTIATION(SortReduceUtils::FileKvReader)

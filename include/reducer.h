@@ -107,8 +107,6 @@ namespace SortReduceReducer {
 		static KvPair DecodeKvPair(SortReduceTypes::Block* block, size_t* p_off, BlockSourceNode* src);
 
 
-		class ReducerNode {
-		};
 
 		class MergerNode : BlockSourceNode {
 		public:
@@ -122,6 +120,16 @@ namespace SortReduceReducer {
 
 			std::vector<BlockSourceNode*> ma_sources;
 
+		};
+		
+		// Not a BlockSourceNode because it writes to storage
+		class ReducerNode {
+		public:
+			ReducerNode(BlockSourceNode* src, size_t block_bytes, int block_count);
+		private:
+			std::thread m_worker_thread;
+			void WorkerThread();
+			bool m_done;
 		};
 
 	private:

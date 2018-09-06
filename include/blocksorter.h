@@ -31,10 +31,8 @@ private:
 	int m_thread_idx;
 
 
-	//template <class tKV>
 	static void SortKV(void* buffer, size_t bytes);
 
-	//template <class tKV>
 	static bool CompareKV(KvPair a, KvPair b);
 
 

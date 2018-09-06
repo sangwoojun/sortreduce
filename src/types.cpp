@@ -52,7 +52,4 @@ SortReduceTypes::Status::Status() {
 	this->done_file = NULL;
 }
 
-template class SortReduceTypes::Config<uint32_t,uint32_t>;
-template class SortReduceTypes::Config<uint32_t,uint64_t>;
-template class SortReduceTypes::Config<uint64_t,uint32_t>;
-template class SortReduceTypes::Config<uint64_t,uint64_t>;
+TEMPLATE_EXPLICIT_INSTANTIATION(SortReduceTypes::Config)

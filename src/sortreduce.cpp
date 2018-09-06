@@ -523,8 +523,4 @@ SortReduce<K,V>::IoEndpoint::Next() {
 	return ret; //TODO
 }
 
-
-template class SortReduce<uint32_t,uint32_t>;
-template class SortReduce<uint32_t,uint64_t>;
-template class SortReduce<uint64_t,uint32_t>;
-template class SortReduce<uint64_t,uint64_t>;
+TEMPLATE_EXPLICIT_INSTANTIATION(SortReduce)
