@@ -7,7 +7,7 @@ INCDIR=./include
 INCFILES=$(wildcard $(INCDIR)/*.h)
 
 CFLAGS=-static -Wall -pedantic -lpthread -laio --std=c++11 -pthread -I$(INCDIR) -O2 -march=native
-SRFLAGS=-DKVTYPES='uint32_t,uint64_t'  -DKVTYPES2='uint32_t,uint32_t'
+SRFLAGS=-DKVTYPES='uint64_t,uint32_t'  -DKVTYPES2='uint32_t,uint32_t'
 
 OUTPUTDIR=./obj
 OBJ=$(patsubst $(SRCDIR)%,$(OUTPUTDIR)%, $(CPPFILES:.cpp=.o))
