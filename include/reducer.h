@@ -14,11 +14,43 @@
 namespace SortReduceReducer {
 	//template <class K, class V>
 	//size_t ReduceInBuffer(V (*update)(V,V), void* buffer, size_t bytes);
+
+	class StreamFileReader {
+	public:
+		StreamFileReader(std::string temp_directory, bool verbose = false);
+		void PutFile(SortReduceTypes::File* file);
+		SortReduceTypes::Block LoadNextFileBlock(int src, bool pop = false);
+		void ReturnBuffer(SortReduceTypes::Block block);
+	private:
+		void FileReadReq(int src);
+
+	private:
+		bool m_started;
+
+		std::vector<SortReduceTypes::File*> mv_file_sources;
+
+		AlignedBufferManager* mp_buffer_manager;
+		TempFileManager* mp_temp_file_manager;
+		
+		size_t m_input_file_bytes = 0;
+
+		std::vector<size_t> mv_file_offset;
+		std::vector<bool> mv_file_eof;
+		std::vector<int> mv_reads_inflight;
+		std::queue<std::tuple<int,SortReduceTypes::Block>> mq_read_request_order;
+		int m_total_reads_inflight = 0;
+	
+		std::vector<std::queue<SortReduceTypes::Block>> mvq_ready_blocks;
+		const size_t m_file_reads_inflight_target = 3;
+
+		std::mutex m_mutex;
+
+	};
 	
 	template <class K, class V>
 	class StreamFileWriterNode {
 	public:
-		StreamFileWriterNode(std::string temp_directory);
+		StreamFileWriterNode(std::string temp_directory, std::string filename);
 	protected:
 		void EmitKv(K key, V val);
 		void EmitFlush();
@@ -56,11 +88,13 @@ namespace SortReduceReducer {
 
 
 		std::mutex m_mutex;
+	};
 
-
-
-
-
+	template <class K, class V>
+	class FileReaderNode : public BlockSourceNode<K,V> {
+	public:
+		FileReaderNode(StreamFileReader* src, int idx);
+	private:
 	};
 	
 	template <class K, class V>
@@ -81,9 +115,10 @@ namespace SortReduceReducer {
 	template <class K, class V>
 	class ReducerNode : public StreamFileWriterNode<K,V> {
 	public:
-		ReducerNode();
-		ReducerNode(BlockSourceNode<K,V>* src, V (*update)(V,V), size_t block_bytes, int block_count, std::string temp_directory, std::string filename = "");
+		ReducerNode(BlockSourceNode<K,V>* src, V (*update)(V,V), std::string temp_directory, std::string filename = "");
 	private:
+		BlockSourceNode<K,V>* mp_src;
+
 		std::thread m_worker_thread;
 		void WorkerThread();
 		bool m_done;

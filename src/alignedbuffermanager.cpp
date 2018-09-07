@@ -1,5 +1,9 @@
 #include "alignedbuffermanager.h"
 
+/**
+TODO deconstructor
+**/
+
 AlignedBufferManager* AlignedBufferManager::mp_instance[ALIGNED_INSTANCE_COUNT] = {NULL,NULL,NULL,NULL};
 
 AlignedBufferManager*
@@ -28,7 +32,8 @@ AlignedBufferManager::Init(size_t buffer_size, int buffer_count) {
 
 	mpp_buffers = (void**)malloc(sizeof(void*)*buffer_count);
 	for ( int i = 0; i < buffer_count; i++ ) {
-		mpp_buffers[i] = aligned_alloc(512, buffer_size);
+		//mpp_buffers[i] = aligned_alloc(512, buffer_size);
+		mpp_buffers[i] = NULL;
 		mq_free_buffers.push(i);
 	}
 
@@ -50,6 +55,10 @@ AlignedBufferManager::GetBuffer() {
 	if ( !mq_free_buffers.empty() ) {
 		int idx = mq_free_buffers.front();
 		mq_free_buffers.pop();
+
+		if ( mpp_buffers[idx] == NULL ) {
+			mpp_buffers[idx] = aligned_alloc(512, m_buffer_size);
+		}
 
 		ret.buffer = mpp_buffers[idx];
 		ret.bytes = m_buffer_size;

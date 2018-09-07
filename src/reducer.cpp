@@ -3,11 +3,12 @@
 #include "types.h"
 
 template <class K, class V>
-SortReduceReducer::StreamFileWriterNode<K,V>::StreamFileWriterNode(std::string temp_directory) {
+SortReduceReducer::StreamFileWriterNode<K,V>::StreamFileWriterNode(std::string temp_directory, std::string filename) {
 	this->m_out_offset = 0;
 	this->m_out_file_offset = 0;
 	this->mp_buffer_manager = AlignedBufferManager::GetInstance(1);
 	this->mp_temp_file_manager = new TempFileManager(temp_directory);
+	this->m_out_file = this->mp_temp_file_manager->CreateEmptyFile(filename);
 	
 	m_out_block = mp_buffer_manager->GetBuffer();
 	while (!m_out_block.valid) {
@@ -72,6 +73,130 @@ SortReduceReducer::StreamFileWriterNode<K,V>::EmitFlush() {
 	m_out_file_offset += m_out_block.valid_bytes;
 
 	while (this->mp_temp_file_manager->CountInFlight() > 0 ) this->mp_temp_file_manager->CheckDone();
+}
+
+SortReduceReducer::StreamFileReader::StreamFileReader(std::string temp_directory, bool verbose) {
+	this->m_total_reads_inflight = 0;
+	this->m_started = false;
+
+	this->mp_buffer_manager = AlignedBufferManager::GetInstance(1);
+	this->mp_temp_file_manager = new TempFileManager(temp_directory, verbose);
+}
+
+void
+SortReduceReducer::StreamFileReader::PutFile(SortReduceTypes::File* file) {
+	if ( this->m_started ) {
+		fprintf(stderr, "Attempting to add data source to started reducer\n" );
+		return;
+	}
+	
+	int cur_count = mv_file_sources.size();
+
+	mv_file_sources.push_back(file);
+
+	//mv_read_offset.push_back(0);
+	mv_file_offset.push_back(0);
+	mv_file_eof.push_back(false);
+	mv_reads_inflight.push_back(0);
+	
+	mvq_ready_blocks.push_back(std::queue<SortReduceTypes::Block>());
+
+	m_input_file_bytes += file->bytes;
+
+	//FileReadReq(cur_count);
+	LoadNextFileBlock(cur_count);
+}
+
+// This method is not thread-safe!
+void
+SortReduceReducer::StreamFileReader::FileReadReq(int src) {
+	SortReduceTypes::File* file = this->mv_file_sources[src];
+
+	while ( !mv_file_eof[src] && mvq_ready_blocks[src].size() + mv_reads_inflight[src] < m_file_reads_inflight_target ) {
+		SortReduceTypes::Block block = mp_buffer_manager->GetBuffer();
+		while (!block.valid) {
+			mp_temp_file_manager->CheckDone();
+			block = mp_buffer_manager->GetBuffer();
+		}
+
+
+		if ( block.bytes + mv_file_offset[src] <= file->bytes ) {
+			block.valid_bytes = block.bytes;
+		} else {
+			block.valid_bytes = file->bytes - mv_file_offset[src];
+			mv_file_eof[src] = true;
+		}
+		
+		if ( block.valid_bytes > 0 ) {
+			//size_t req_bytes = block.valid_bytes;
+			//if ( req_bytes % 512 > 0 ) req_bytes = ((req_bytes/512)+1)*512;
+			while ( 0 > this->mp_temp_file_manager->Read(file, mv_file_offset[src], block.bytes, block.buffer) );
+
+			mv_file_offset[src] += block.bytes;
+			mv_reads_inflight[src] ++;
+			m_total_reads_inflight ++;
+
+			mq_read_request_order.push(std::make_tuple(src,block));
+		} else {
+			mp_buffer_manager->ReturnBuffer(block);
+		}
+	}
+	//printf( "Block %ld %d\n",block.bytes,block.managed_idx ); fflush(stdout);
+}
+
+SortReduceTypes::Block
+SortReduceReducer::StreamFileReader::LoadNextFileBlock(int src, bool pop) {
+	SortReduceTypes::Block ret;
+	ret.valid = true;
+
+	m_mutex.lock();
+
+	FileReadReq(src);
+
+	while ( mvq_ready_blocks[src].size() < 1 && mv_reads_inflight[src] > 0 ) {
+		int read_done = mp_temp_file_manager->ReadStatus(true);
+		m_total_reads_inflight -= read_done;
+
+		for ( int i = 0; i < read_done; i++ ) {
+			if ( mq_read_request_order.empty() ) {
+				fprintf(stderr, "mq_read_request_order empty! %s:%d\n", __FILE__, __LINE__ );
+				exit(1);
+			}
+
+			std::tuple<int,SortReduceTypes::Block> req = mq_read_request_order.front();
+			mq_read_request_order.pop();
+			int dst = std::get<0>(req);
+			SortReduceTypes::Block block = std::get<1>(req);
+
+			mv_reads_inflight[dst] --;
+
+			mvq_ready_blocks[dst].push(block);
+
+			//printf( "File read %d\n", src ); fflush(stdout);
+		}
+
+		if ( m_total_reads_inflight < 0 ) {
+			fprintf(stderr, "Total_reads_inflight is negative! %d %s:%d\n", m_total_reads_inflight, __FILE__, __LINE__ );
+		}
+	}
+
+	//FileReadReq(src);
+
+	if ( !mvq_ready_blocks[src].empty() ) {
+		ret = mvq_ready_blocks[src].front();
+		if ( pop ) mvq_ready_blocks[src].pop();
+	} else {
+		ret.last = true;
+	}
+	
+	m_mutex.unlock();
+
+	return ret;
+}
+
+void
+SortReduceReducer::StreamFileReader::ReturnBuffer(SortReduceTypes::Block block) {
+	mp_buffer_manager->ReturnBuffer(block);
 }
 
 
@@ -619,21 +744,47 @@ SortReduceReducer::MergerNode<K,V>::WorkerThread2() {
 }
 
 template <class K, class V>
-SortReduceReducer::ReducerNode<K,V>::ReducerNode() : SortReduceReducer::StreamFileWriterNode<K,V>::StreamFileWriterNode("") {
+SortReduceReducer::ReducerNode<K,V>::ReducerNode(BlockSourceNode<K,V>* src, V (*update)(V,V), std::string temp_directory, std::string filename)
+	: SortReduceReducer::StreamFileWriterNode<K,V>::StreamFileWriterNode(temp_directory, filename) {
 
-}
-
-/*
-template <class K, class V>
-SortReduceReducer::ReducerNode<K,V>::ReducerNode(BlockSourceNode* src, V (*update)(V,V), size_t block_bytes, int block_count, std::string temp_directory, std::string filename = "") {
 	m_done = false;
+
+	mp_src = src;
+	mp_update = update;
+
 	m_worker_thread = std::thread(&ReducerNode::WorkerThread,this);
 
 }
-*/
+
 template <class K, class V>
 void
 SortReduceReducer::ReducerNode<K,V>::WorkerThread() {
+	size_t in_off = 0;
+	SortReduceTypes::Block in_block;
+
+	while ( in_block.valid == false ) {
+		in_block = mp_src->GetBlock();
+	}
+	
+	SortReduceTypes::KvPair<K,V> last_kvp = {0};
+
+	if (in_block.last != false) {
+		last_kvp = ReducerUtils<K,V>::DecodeKvPair(&in_block, &in_off, mp_src);
+	
+		while (in_block.last == false) {
+			SortReduceTypes::KvPair<K,V> kvp = ReducerUtils<K,V>::DecodeKvPair(&in_block, &in_off, mp_src);
+			if ( kvp.key == last_kvp.key ) {
+				last_kvp.val = mp_update(last_kvp.val, kvp.val);
+			} else {
+				this->EmitKv(last_kvp.key, last_kvp.val);
+				last_kvp = kvp;
+			}
+		}
+	}
+
+	this->EmitFlush();
+
+	m_done = true;
 }
 
 template <class K, class V>
