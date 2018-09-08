@@ -66,9 +66,16 @@ namespace SortReduceReducer {
 		AlignedBufferManager* mp_buffer_manager;
 		TempFileManager* mp_temp_file_manager;
 	};
+	
+	template <class K, class V>
+	class BlockSource {
+	public:
+		virtual SortReduceTypes::Block GetBlock() = 0;
+		virtual void ReturnBlock(SortReduceTypes::Block block) = 0;
+	};
 		
 	template <class K, class V>
-	class BlockSourceNode {
+	class BlockSourceNode : public BlockSource<K,V> {
 	public:
 		BlockSourceNode(size_t block_bytes, int block_count);
 		SortReduceTypes::Block GetBlock();
@@ -91,7 +98,7 @@ namespace SortReduceReducer {
 	};
 
 	template <class K, class V>
-	class FileReaderNode : public BlockSourceNode<K,V> {
+	class FileReaderNode : public BlockSource<K,V> {
 	public:
 		FileReaderNode(StreamFileReader* src, int idx);
 	private:
@@ -101,23 +108,23 @@ namespace SortReduceReducer {
 	class MergerNode : public BlockSourceNode<K,V> {
 	public:
 		MergerNode(size_t block_bytes, int block_count);
-		void AddSource(BlockSourceNode<K,V>* src);
+		void AddSource(BlockSource<K,V>* src);
 		void Start();
 	private:
 		std::thread m_worker_thread;
 		void WorkerThread2();
 		bool m_started;
 
-		std::vector<BlockSourceNode<K,V>*> ma_sources;
+		std::vector<BlockSource<K,V>*> ma_sources;
 
 	};
 
 	template <class K, class V>
 	class ReducerNode : public StreamFileWriterNode<K,V> {
 	public:
-		ReducerNode(BlockSourceNode<K,V>* src, V (*update)(V,V), std::string temp_directory, std::string filename = "");
+		ReducerNode(BlockSource<K,V>* src, V (*update)(V,V), std::string temp_directory, std::string filename = "");
 	private:
-		BlockSourceNode<K,V>* mp_src;
+		BlockSource<K,V>* mp_src;
 
 		std::thread m_worker_thread;
 		void WorkerThread();
@@ -129,7 +136,7 @@ namespace SortReduceReducer {
 	template <class K, class V>
 	class ReducerUtils {
 	public:
-		static SortReduceTypes::KvPair<K,V> DecodeKvPair(SortReduceTypes::Block* block, size_t* p_off, BlockSourceNode<K,V>* src);
+		static SortReduceTypes::KvPair<K,V> DecodeKvPair(SortReduceTypes::Block* block, size_t* p_off, BlockSource<K,V>* src);
 		static K DecodeKey(void* buffer, size_t offset);
 		static V DecodeVal(void* buffer, size_t offset);
 		static void EncodeKvp(void* buffer, size_t offset, K key, V val);

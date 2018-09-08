@@ -450,7 +450,7 @@ SortReduceReducer::ReducerUtils<K,V>::EncodeVal(void* buffer, size_t offset, V v
 
 template <class K, class V>
 inline SortReduceTypes::KvPair<K,V>
-SortReduceReducer::ReducerUtils<K,V>::DecodeKvPair(SortReduceTypes::Block* p_block, size_t* p_off, BlockSourceNode<K,V>* src) {
+SortReduceReducer::ReducerUtils<K,V>::DecodeKvPair(SortReduceTypes::Block* p_block, size_t* p_off, BlockSource<K,V>* src) {
 	SortReduceTypes::KvPair<K,V> kvp = {0};
 	if ( p_block == NULL ) return kvp;
 
@@ -517,7 +517,8 @@ SortReduceReducer::ReducerUtils<K,V>::DecodeKvPair(SortReduceTypes::Block* p_blo
 }
 
 template <class K, class V>
-SortReduceReducer::BlockSourceNode<K,V>::BlockSourceNode(size_t block_bytes, int block_count) {
+SortReduceReducer::BlockSourceNode<K,V>::BlockSourceNode(size_t block_bytes, int block_count)
+	: SortReduceReducer::BlockSource<K,V>::BlockSource() {
 	for ( int i = 0; i < block_count; i++ ) {
 		SortReduceTypes::Block block;
 		block.valid = true;
@@ -670,7 +671,7 @@ SortReduceReducer::MergerNode<K,V>::MergerNode(size_t block_bytes, int block_cou
 
 template <class K, class V>
 void
-SortReduceReducer::MergerNode<K,V>::AddSource(BlockSourceNode<K,V>* src) {
+SortReduceReducer::MergerNode<K,V>::AddSource(BlockSource<K,V>* src) {
 	if ( m_started ) return;
 
 	ma_sources.push_back(src);
@@ -744,7 +745,7 @@ SortReduceReducer::MergerNode<K,V>::WorkerThread2() {
 }
 
 template <class K, class V>
-SortReduceReducer::ReducerNode<K,V>::ReducerNode(BlockSourceNode<K,V>* src, V (*update)(V,V), std::string temp_directory, std::string filename)
+SortReduceReducer::ReducerNode<K,V>::ReducerNode(BlockSource<K,V>* src, V (*update)(V,V), std::string temp_directory, std::string filename)
 	: SortReduceReducer::StreamFileWriterNode<K,V>::StreamFileWriterNode(temp_directory, filename) {
 
 	m_done = false;
@@ -1041,6 +1042,7 @@ SortReduceReducer::StreamMergeReducer_MultiTree<K,V>::Start() {
 
 TEMPLATE_EXPLICIT_INSTANTIATION(SortReduceReducer::ReducerUtils)
 TEMPLATE_EXPLICIT_INSTANTIATION(SortReduceReducer::StreamFileWriterNode)
+TEMPLATE_EXPLICIT_INSTANTIATION(SortReduceReducer::BlockSource)
 TEMPLATE_EXPLICIT_INSTANTIATION(SortReduceReducer::BlockSourceNode)
 TEMPLATE_EXPLICIT_INSTANTIATION(SortReduceReducer::ReducerNode)
 TEMPLATE_EXPLICIT_INSTANTIATION(SortReduceReducer::MergerNode)
