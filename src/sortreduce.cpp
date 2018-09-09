@@ -333,9 +333,12 @@ SortReduce<K,V>::ManagerThread() {
 				last_merge = true;
 			}
 
-			SortReduceReducer::StreamMergeReducer<K,V>* merger;
+			//SortReduceReducer::StreamMergeReducer<K,V>* merger;
+			SortReduceReducer::MergeReducer<K,V>* merger;
 			if ( last_merge ) {
-				merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory, m_config->output_filename);
+				//FIXME DOES THIS WORK?
+				//merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory, m_config->output_filename);
+				merger = new SortReduceReducer::MergeReducer_MultiTree<K,V>(m_config->update, m_config->temporary_directory, m_config->output_filename);
 			} else {
 				// Invisible temporary file
 				merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory);
@@ -364,7 +367,7 @@ SortReduce<K,V>::ManagerThread() {
 		}
 
 		for ( int i = 0; i < mv_stream_mergers_from_storage.size(); ) {
-			SortReduceReducer::StreamMergeReducer<K,V>* reducer = mv_stream_mergers_from_storage[i];
+			SortReduceReducer::MergeReducer<K,V>* reducer = mv_stream_mergers_from_storage[i];
 			if ( reducer->IsDone() ) {
 				SortReduceTypes::File* reduced_file = reducer->GetOutFile();
 				m_file_priority_queue.push(reduced_file);

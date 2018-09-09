@@ -25,6 +25,7 @@
 #include "blocksorter.h"
 #include "filekvreader.h"
 #include "reducer.h"
+#include "mergereducer_multitree.h"
 #include "types.h"
 #include "utils.h"
 
@@ -99,7 +100,7 @@ private:
 	bool m_reduce_phase;
 
 	std::vector<SortReduceReducer::StreamMergeReducer<K,V>*> mv_stream_mergers_from_mem;
-	std::vector<SortReduceReducer::StreamMergeReducer<K,V>*> mv_stream_mergers_from_storage;
+	std::vector<SortReduceReducer::MergeReducer<K,V>*> mv_stream_mergers_from_storage;
 
 	std::priority_queue<SortReduceTypes::File*,std::vector<SortReduceTypes::File*>, SortReduceTypes::CompareFileSize> m_file_priority_queue;
 

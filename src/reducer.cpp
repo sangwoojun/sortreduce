@@ -196,8 +196,30 @@ SortReduceReducer::StreamFileReader::LoadNextFileBlock(int src, bool pop) {
 
 void
 SortReduceReducer::StreamFileReader::ReturnBuffer(SortReduceTypes::Block block) {
-	mp_buffer_manager->ReturnBuffer(block);
+	if ( block.valid && !block.last ) {
+		mp_buffer_manager->ReturnBuffer(block);
+	}
 }
+
+template <class K, class V>
+SortReduceReducer::FileReaderNode<K,V>::FileReaderNode(StreamFileReader* src, int idx) {
+	mp_reader = src;
+	m_idx = idx;
+}
+
+template <class K, class V>
+SortReduceTypes::Block
+SortReduceReducer::FileReaderNode<K,V>::GetBlock() {
+	SortReduceTypes::Block ret = mp_reader->LoadNextFileBlock(m_idx, true);
+	return ret;
+}
+
+template <class K, class V>
+void
+SortReduceReducer::FileReaderNode<K,V>::ReturnBlock(SortReduceTypes::Block block) {
+	mp_reader->ReturnBuffer(block);
+}
+
 
 
 template <class K, class V>
@@ -460,23 +482,27 @@ SortReduceReducer::ReducerUtils<K,V>::DecodeKvPair(SortReduceTypes::Block* p_blo
 
 
 	size_t avail = valid_bytes - off;
-	if ( avail >= sizeof(K) + sizeof(V) ) {
+	if ( avail > sizeof(K) + sizeof(V) ) {
 
 		kvp.key = DecodeKey(buffer, off);
 		kvp.val = DecodeVal(buffer, off+sizeof(K));
 		*p_off += sizeof(K)+sizeof(V);
+	} else if ( avail == sizeof(K)+sizeof(V) ) {
+		kvp.key = DecodeKey(buffer, off);
+		kvp.val = DecodeVal(buffer, off+sizeof(K));
+		*p_off += sizeof(K)+sizeof(V);
 
-		if ( avail == sizeof(K)+sizeof(V) ) {
-			src->ReturnBlock(*p_block);
+		src->ReturnBlock(*p_block);
 
-			SortReduceTypes::Block block;
-			block.valid = false;
-			while ( block.valid == false ) {
-				block = src->GetBlock();
-			}
-			*p_block = block;
-			*p_off = 0;
+		SortReduceTypes::Block block;
+		block.valid = false;
+		while ( block.valid == false ) {
+			block = src->GetBlock();
 		}
+		src->ReturnBlock(*p_block);
+
+		*p_block = block;
+		*p_off = 0;
 	} else if ( avail >= sizeof(K) ) {
 		kvp.key = DecodeKey(buffer, off);
 		size_t debt = sizeof(K) + sizeof(V) - avail;
@@ -491,6 +517,8 @@ SortReduceReducer::ReducerUtils<K,V>::DecodeKvPair(SortReduceTypes::Block* p_blo
 		}
 
 		memcpy(((uint8_t*)&kvp.val)+avail-sizeof(K), block.buffer, debt);
+
+		src->ReturnBlock(*p_block);
 		*p_block = block;
 		*p_off = debt;
 	} else {
@@ -506,12 +534,11 @@ SortReduceReducer::ReducerUtils<K,V>::DecodeKvPair(SortReduceTypes::Block* p_blo
 		}
 		memcpy(((uint8_t*)&kvp.key)+avail, block.buffer, debt);
 		kvp.val = DecodeVal(block.buffer, debt);
+		
+		src->ReturnBlock(*p_block);
 		*p_block = block;
 		*p_off = debt+sizeof(V);
 	}
-
-
-
 
 	return kvp;
 }
@@ -519,6 +546,8 @@ SortReduceReducer::ReducerUtils<K,V>::DecodeKvPair(SortReduceTypes::Block* p_blo
 template <class K, class V>
 SortReduceReducer::BlockSourceNode<K,V>::BlockSourceNode(size_t block_bytes, int block_count)
 	: SortReduceReducer::BlockSource<K,V>::BlockSource() {
+	m_kill = false;
+
 	for ( int i = 0; i < block_count; i++ ) {
 		SortReduceTypes::Block block;
 		block.valid = true;
@@ -533,6 +562,15 @@ SortReduceReducer::BlockSourceNode<K,V>::BlockSourceNode(size_t block_bytes, int
 		this->mq_free_idx.push(i);
 	}
 	m_out_offset = 0;
+}
+template <class K, class V>
+SortReduceReducer::BlockSourceNode<K,V>::~BlockSourceNode() {
+	m_kill = true;
+	//TODO  return all blocks
+
+	for ( int i = 0; i < ma_blocks.size(); i++ ) {
+		free(ma_blocks[i].buffer);
+	}
 }
 
 template <class K, class V>
@@ -745,16 +783,19 @@ SortReduceReducer::MergerNode<K,V>::WorkerThread2() {
 }
 
 template <class K, class V>
-SortReduceReducer::ReducerNode<K,V>::ReducerNode(BlockSource<K,V>* src, V (*update)(V,V), std::string temp_directory, std::string filename)
+SortReduceReducer::ReducerNode<K,V>::ReducerNode(V (*update)(V,V), std::string temp_directory, std::string filename)
 	: SortReduceReducer::StreamFileWriterNode<K,V>::StreamFileWriterNode(temp_directory, filename) {
-
 	m_done = false;
 
-	mp_src = src;
 	mp_update = update;
 
-	m_worker_thread = std::thread(&ReducerNode::WorkerThread,this);
 
+}
+template <class K, class V>
+void
+SortReduceReducer::ReducerNode<K,V>::SetSource( BlockSource<K,V>* src) {
+	mp_src = src;
+	m_worker_thread = std::thread(&ReducerNode::WorkerThread,this);
 }
 
 template <class K, class V>
@@ -783,6 +824,7 @@ SortReduceReducer::ReducerNode<K,V>::WorkerThread() {
 		}
 	}
 
+	mp_src->ReturnBlock(in_block);
 	this->EmitFlush();
 
 	m_done = true;
@@ -1005,35 +1047,6 @@ SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::WorkerThread() {
 
 
 
-template <class K, class V>
-SortReduceReducer::StreamMergeReducer_MultiTree<K,V>::StreamMergeReducer_MultiTree(V (*update)(V,V), std::string temp_directory, std::string filename, bool verbose) : SortReduceReducer::StreamMergeReducer<K,V>() {
-	this->m_done = false;
-	this->m_started = false;
-
-	//this->ms_temp_directory = temp_directory;
-	this->mp_update = update;
-
-	this->mp_temp_file_manager = new TempFileManager(temp_directory, verbose);
-	
-	this->m_out_file = this->mp_temp_file_manager->CreateEmptyFile(filename);
-}
-
-template <class K, class V>
-SortReduceReducer::StreamMergeReducer_MultiTree<K,V>::~StreamMergeReducer_MultiTree() {
-	//m_worker_thread.join();
-	delete this->mp_temp_file_manager;
-	//printf( "Worker thread joined\n" );
-}
-
-template <class K, class V>
-void
-SortReduceReducer::StreamMergeReducer_MultiTree<K,V>::Start() {
-	this->m_started = true;
-
-	//printf( "StreamMergeReducer_SinglePriority started with %lu inputs\n", this->mv_input_sources.size() ); fflush(stdout);
-
-	//m_worker_thread = std::thread(&StreamMergeReducer_SinglePriority<K,V>::WorkerThread,this);
-}
 
 
 

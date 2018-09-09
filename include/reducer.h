@@ -51,6 +51,7 @@ namespace SortReduceReducer {
 	class StreamFileWriterNode {
 	public:
 		StreamFileWriterNode(std::string temp_directory, std::string filename);
+		SortReduceTypes::File* GetOutFile() { return m_out_file; };
 	protected:
 		void EmitKv(K key, V val);
 		void EmitFlush();
@@ -78,6 +79,7 @@ namespace SortReduceReducer {
 	class BlockSourceNode : public BlockSource<K,V> {
 	public:
 		BlockSourceNode(size_t block_bytes, int block_count);
+		~BlockSourceNode();
 		SortReduceTypes::Block GetBlock();
 		void ReturnBlock(SortReduceTypes::Block block);
 	protected:
@@ -92,6 +94,8 @@ namespace SortReduceReducer {
 		NOTE: "last" block needs to be returned as well!
 		**/
 		void FinishEmit();
+		
+		bool m_kill;
 
 
 		std::mutex m_mutex;
@@ -101,13 +105,17 @@ namespace SortReduceReducer {
 	class FileReaderNode : public BlockSource<K,V> {
 	public:
 		FileReaderNode(StreamFileReader* src, int idx);
+		SortReduceTypes::Block GetBlock();
+		void ReturnBlock(SortReduceTypes::Block block);
 	private:
+		StreamFileReader* mp_reader;
+		int m_idx;
 	};
 	
 	template <class K, class V>
 	class MergerNode : public BlockSourceNode<K,V> {
 	public:
-		MergerNode(size_t block_bytes, int block_count);
+		MergerNode(size_t block_bytes, int block_count); //FIXME should use buffer manager!
 		void AddSource(BlockSource<K,V>* src);
 		void Start();
 	private:
@@ -122,7 +130,9 @@ namespace SortReduceReducer {
 	template <class K, class V>
 	class ReducerNode : public StreamFileWriterNode<K,V> {
 	public:
-		ReducerNode(BlockSource<K,V>* src, V (*update)(V,V), std::string temp_directory, std::string filename = "");
+		ReducerNode(V (*update)(V,V), std::string temp_directory, std::string filename = "");
+		void SetSource(BlockSource<K,V>* src);
+		bool IsDone() { return m_done; };
 	private:
 		BlockSource<K,V>* mp_src;
 
@@ -143,9 +153,24 @@ namespace SortReduceReducer {
 		static void EncodeKey(void* buffer, size_t offset, K key);
 		static void EncodeVal(void* buffer, size_t offset, V val);
 	};
+	
+	template <class K, class V>
+	class MergeReducer {
+	public:
+		virtual ~MergeReducer();
+		virtual void PutBlock(SortReduceTypes::Block block) = 0;
+		virtual void PutFile(SortReduceTypes::File* file) = 0;
+		virtual void Start() = 0;
+		virtual bool IsDone() = 0;
+		virtual SortReduceTypes::File* GetOutFile() = 0;
+
+		virtual size_t GetInputFileBytes() = 0;
+	protected:
+		V (*mp_update)(V,V);
+	};
 
 	template <class K, class V>
-	class StreamMergeReducer {
+	class StreamMergeReducer : public MergeReducer<K,V> {
 	public:
 		StreamMergeReducer();
 		virtual ~StreamMergeReducer() {};
@@ -167,7 +192,6 @@ namespace SortReduceReducer {
 		std::vector<DataSource> mv_input_sources;
 
 	protected:
-		V (*mp_update)(V,V);
 
 		SortReduceTypes::File* m_out_file;
 		SortReduceTypes::Block m_out_block;
@@ -233,23 +257,6 @@ namespace SortReduceReducer {
 
 	};
 
-
-
-
-	template <class K, class V>
-	class StreamMergeReducer_MultiTree : public StreamMergeReducer<K,V> {
-	public:
-		StreamMergeReducer_MultiTree(V (*update)(V,V), std::string temp_directory, std::string filename = "", bool verbose = false);
-		~StreamMergeReducer_MultiTree();
-
-		void Start();
-	private:
-
-		//void WorkerThread();
-		//std::thread m_worker_thread;
-		//std::mutex m_mutex;
-
-	};
 
 
 }
