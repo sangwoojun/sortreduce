@@ -25,7 +25,15 @@ uint32_t update_function(uint32_t a, uint32_t b) {
 int main(int argc, char** argv) {
 	srand(time(0));
 
-	SortReduceTypes::Config<uint64_t,uint32_t>* conf = new SortReduceTypes::Config<uint64_t,uint32_t>("/mnt/md0/wjun/", "output.dat", 16);
+	if ( argc < 3 ) {
+		fprintf(stderr, "usage: %s directory element_count\n", argv[0] );
+		exit(1);
+	}
+
+	char* tmp_dir = argv[1];
+	uint64_t element_count = strtoull(argv[2], NULL, 10);
+
+	SortReduceTypes::Config<uint64_t,uint32_t>* conf = new SortReduceTypes::Config<uint64_t,uint32_t>(tmp_dir, "output.dat", 16);
 	conf->SetUpdateFunction(&update_function);
 	conf->SetMaxBytesInFlight(1024*1024*1024); //1GB
 	//conf->SetManagedBufferSize(1024*1024*32, 64); // 2 GB
@@ -38,7 +46,7 @@ int main(int argc, char** argv) {
 	printf( "Started!\n" ); fflush(stdout);
 
 	//for ( uint32_t i = 0; i < 1024*1024*128; i++ ) {
-	for ( uint64_t i = 0; i < (uint64_t)1024*1024*1024; i++ ) { //  12 GB
+	for ( uint64_t i = 0; i < element_count; i++ ) { //  12 GB
 		uint64_t key = (uint64_t)(rand()&0xffff);
 		//uint64_t key = 1;
 		//while ( !sr->Update(key, (1<<16)|1, false) );
@@ -83,14 +91,15 @@ int main(int argc, char** argv) {
 		if ( last_key > key ) {
 			printf( "Result key order wrong %lu %lu\n", last_key, key );
 		}
+		last_key = key;
 
 		if ( golden_map.find(key) == golden_map.end() ) {
 			nonexist_count ++;
-			//printf( "%lu -- \n", key );
+			printf( "nonexist %lu -- \n", key );
 		} else {
 			if ( golden_map[key] != val ) {
 				mismatch_count ++;
-				printf( "%lx: %x -- %x\n", key, golden_map[key], val );
+				printf( "mismatch %lx: %x -- %x\n", key, golden_map[key], val );
 			}
 			golden_map.erase(golden_map.find(key));
 		}

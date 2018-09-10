@@ -71,7 +71,7 @@ namespace SortReduceReducer {
 	template <class K, class V>
 	class BlockSource {
 	public:
-		virtual ~BlockSource() = 0;
+		virtual ~BlockSource();
 		virtual SortReduceTypes::Block GetBlock() = 0;
 		virtual void ReturnBlock(SortReduceTypes::Block block) = 0;
 	};

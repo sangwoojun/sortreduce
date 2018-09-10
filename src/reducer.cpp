@@ -105,6 +105,8 @@ SortReduceReducer::StreamFileReader::PutFile(SortReduceTypes::File* file) {
 
 	//FileReadReq(cur_count);
 	LoadNextFileBlock(cur_count);
+
+	printf( "StreamFileReader reading file %s : %ld\n", file->path.c_str(), file->bytes );
 }
 
 // This method is not thread-safe!
@@ -132,7 +134,7 @@ SortReduceReducer::StreamFileReader::FileReadReq(int src) {
 			//if ( req_bytes % 512 > 0 ) req_bytes = ((req_bytes/512)+1)*512;
 			while ( 0 > this->mp_temp_file_manager->Read(file, mv_file_offset[src], block.bytes, block.buffer) );
 
-			mv_file_offset[src] += block.bytes;
+			mv_file_offset[src] += block.valid_bytes;
 			mv_reads_inflight[src] ++;
 			m_total_reads_inflight ++;
 
@@ -220,7 +222,9 @@ SortReduceReducer::FileReaderNode<K,V>::ReturnBlock(SortReduceTypes::Block block
 	mp_reader->ReturnBuffer(block);
 }
 
-
+template <class K, class V>
+SortReduceReducer::MergeReducer<K,V>::~MergeReducer() {
+}
 
 template <class K, class V>
 SortReduceReducer::StreamMergeReducer<K,V>::StreamMergeReducer() {
@@ -472,7 +476,7 @@ SortReduceReducer::ReducerUtils<K,V>::EncodeVal(void* buffer, size_t offset, V v
 
 template <class K, class V>
 inline SortReduceTypes::KvPair<K,V>
-SortReduceReducer::ReducerUtils<K,V>::DecodeKvPair(SortReduceTypes::Block* p_block, size_t* p_off, BlockSource<K,V>* src, bool* kill) {
+SortReduceReducer::ReducerUtils<K,V>::DecodeKvPair(SortReduceTypes::Block* p_block, size_t* p_off, BlockSource<K,V>* src, bool* p_kill) {
 	SortReduceTypes::KvPair<K,V> kvp = {0};
 	if ( p_block == NULL ) return kvp;
 
@@ -490,13 +494,10 @@ SortReduceReducer::ReducerUtils<K,V>::DecodeKvPair(SortReduceTypes::Block* p_blo
 	} else if ( avail == sizeof(K)+sizeof(V) ) {
 		kvp.key = DecodeKey(buffer, off);
 		kvp.val = DecodeVal(buffer, off+sizeof(K));
-		*p_off += sizeof(K)+sizeof(V);
-
-		src->ReturnBlock(*p_block);
 
 		SortReduceTypes::Block block;
 		block.valid = false;
-		while ( block.valid == false && !kill ) {
+		while ( block.valid == false && !*p_kill ) {
 			block = src->GetBlock();
 		}
 		src->ReturnBlock(*p_block);
@@ -506,13 +507,14 @@ SortReduceReducer::ReducerUtils<K,V>::DecodeKvPair(SortReduceTypes::Block* p_blo
 	} else if ( avail >= sizeof(K) ) {
 		kvp.key = DecodeKey(buffer, off);
 		size_t debt = sizeof(K) + sizeof(V) - avail;
+		off += sizeof(K);
 		memcpy(&kvp.val, ((uint8_t*)buffer+off), avail-sizeof(K));
 
 		src->ReturnBlock(*p_block);
 
 		SortReduceTypes::Block block;
 		block.valid = false;
-		while ( block.valid == false && !kill) {
+		while ( block.valid == false && !*p_kill) {
 			block = src->GetBlock();
 		}
 
@@ -529,7 +531,7 @@ SortReduceReducer::ReducerUtils<K,V>::DecodeKvPair(SortReduceTypes::Block* p_blo
 
 		SortReduceTypes::Block block;
 		block.valid = false;
-		while ( block.valid == false && !kill ) {
+		while ( block.valid == false && !*p_kill ) {
 			block = src->GetBlock();
 		}
 		memcpy(((uint8_t*)&kvp.key)+avail, block.buffer, debt);
@@ -544,6 +546,10 @@ SortReduceReducer::ReducerUtils<K,V>::DecodeKvPair(SortReduceTypes::Block* p_blo
 }
 
 template <class K, class V>
+SortReduceReducer::BlockSource<K,V>::~BlockSource() {
+}
+
+template <class K, class V>
 SortReduceReducer::BlockSourceNode<K,V>::BlockSourceNode(size_t block_bytes, int block_count)
 	: SortReduceReducer::BlockSource<K,V>::BlockSource() {
 
@@ -554,6 +560,7 @@ SortReduceReducer::BlockSourceNode<K,V>::BlockSourceNode(size_t block_bytes, int
 		block.managed = true;
 		block.managed_idx = i;
 		block.buffer = malloc(block_bytes);
+		//block.valid_bytes = block_bytes;
 		block.bytes = block_bytes;
 		this->ma_blocks.push_back(block);
 
@@ -616,7 +623,7 @@ SortReduceReducer::BlockSourceNode<K,V>::EmitKvPair(K key, V val) {
 
 	SortReduceTypes::Block block = ma_blocks[cur_block_idx];
 
-	size_t avail = block.valid_bytes - m_out_offset;
+	size_t avail = block.bytes - m_out_offset;
 	
 	if ( avail >= sizeof(K)+sizeof(V) ) {
 		ReducerUtils<K,V>::EncodeKvp(block.buffer, m_out_offset, key, val);
@@ -626,8 +633,10 @@ SortReduceReducer::BlockSourceNode<K,V>::EmitKvPair(K key, V val) {
 		memcpy(((uint8_t*)block.buffer)+m_out_offset+sizeof(K), &val, avail-sizeof(K));
 
 		m_mutex.lock();
+		ma_blocks[cur_block_idx].valid_bytes = block.bytes;
 		mq_ready_idx.push(cur_block_idx);
 		mq_free_idx.pop();
+
 		bool free_exist = !mq_free_idx.empty();
 		m_mutex.unlock();
 		while ( !free_exist ) {
@@ -636,6 +645,7 @@ SortReduceReducer::BlockSourceNode<K,V>::EmitKvPair(K key, V val) {
 			m_mutex.unlock();
 		}
 		m_mutex.lock();
+
 		cur_block_idx = mq_free_idx.front();
 		m_mutex.unlock();
 		SortReduceTypes::Block* p_block = &ma_blocks[cur_block_idx];
@@ -649,10 +659,12 @@ SortReduceReducer::BlockSourceNode<K,V>::EmitKvPair(K key, V val) {
 		memcpy(((uint8_t*)block.buffer)+m_out_offset, &key, avail);
 		
 		m_mutex.lock();
+		ma_blocks[cur_block_idx].valid_bytes = block.bytes;
 		mq_ready_idx.push(cur_block_idx);
 		mq_free_idx.pop();
 		bool free_exist = !mq_free_idx.empty();
 		m_mutex.unlock();
+
 		while ( !free_exist ) {
 			m_mutex.lock();
 			free_exist = !mq_free_idx.empty();
@@ -669,7 +681,6 @@ SortReduceReducer::BlockSourceNode<K,V>::EmitKvPair(K key, V val) {
 		memcpy(block.buffer, ((uint8_t*)&val)+avail, debt);
 
 		m_out_offset = debt;
-
 		ReducerUtils<K,V>::EncodeVal(block.buffer, m_out_offset, val);
 		m_out_offset += sizeof(V);
 	}
@@ -680,8 +691,12 @@ void
 SortReduceReducer::BlockSourceNode<K,V>::FinishEmit() {
 	m_mutex.lock();
 	int cur_block_idx = mq_free_idx.front();
+
+	ma_blocks[cur_block_idx].valid_bytes = m_out_offset;
 	mq_ready_idx.push(cur_block_idx);
 
+
+	mq_free_idx.pop();
 	bool free_exist = !mq_free_idx.empty();
 	m_mutex.unlock();
 		
@@ -739,6 +754,8 @@ SortReduceReducer::MergerNode<K,V>::Start() {
 template <class K, class V>
 void
 SortReduceReducer::MergerNode<K,V>::WorkerThread2() {
+	printf( "MergerNode workerthread started!\n" ); fflush(stdout);
+
 	SortReduceTypes::Block cur_blocks[2];
 	for ( int i = 0; i < 2 && !m_kill; i++ ) {
 		SortReduceTypes::Block block;
@@ -748,6 +765,8 @@ SortReduceReducer::MergerNode<K,V>::WorkerThread2() {
 		}
 		cur_blocks[i] = block;
 	}
+	
+	//printf( "MergerNode Initial blocks read %ld %ld!\n", cur_blocks[0].valid_bytes, cur_blocks[1].valid_bytes ); fflush(stdout);
 
 	// cur_blocks are all valid. They may still be "last", with no buffer/bytes
 
@@ -756,37 +775,87 @@ SortReduceReducer::MergerNode<K,V>::WorkerThread2() {
 	bool valid0 = false;
 	bool valid1 = false;
 	SortReduceTypes::KvPair<K,V> kvp0 = {0}, kvp1 = {0};
+	uint64_t cnt = 0;
+
+	K last_emit_key = 0;
+	K last_read_key0 = 0;
+	K last_read_key1 = 0;
 
 	while (cur_blocks[0].last == false && cur_blocks[1].last == false && !m_kill) {
 		if ( !valid0 ) {
 			kvp0 = ReducerUtils<K,V>::DecodeKvPair(&cur_blocks[0], &in_off0, ma_sources[0], &m_kill);
 			valid0 = true;
+
+			if ( last_read_key0 > kvp0.key ) {
+				printf( "MergerNode key read 0 order wrong! %ld %ld\n", last_read_key0, kvp0.key ); fflush(stdout);
+			}
+			last_read_key0 = kvp0.key;
 		}
 		if ( !valid1 ) {
 			kvp1 = ReducerUtils<K,V>::DecodeKvPair(&cur_blocks[1], &in_off1, ma_sources[1], &m_kill);
 			valid1 = true;
+			
+			if ( last_read_key1 > kvp1.key ) {
+				printf( "MergerNode key read 1 order wrong! %ld %ld\n", last_read_key1, kvp1.key ); fflush(stdout);
+			}
+			last_read_key1 = kvp1.key;
 		}
 
 		if ( kvp0.key < kvp1.key ) {
 			this->EmitKvPair(kvp0.key, kvp0.val);
+			if ( last_emit_key > kvp0.key ) {
+				printf( "MergerNode key emit order wrong! %ld %ld\n", last_emit_key, kvp0.key ); fflush(stdout);
+			}
+			last_emit_key = kvp0.key;
+
 			valid0 = false;
 		} else {
 			this->EmitKvPair(kvp1.key, kvp1.val);
+			if ( last_emit_key > kvp1.key ) {
+				printf( "MergerNode key emit order wrong! %ld %ld\n", last_emit_key, kvp1.key ); fflush(stdout);
+			}
+			last_emit_key = kvp1.key;
+
 			valid1 = false;
 		}
+		cnt++;
 	}
+	printf( "MergerNode one end reached -- %ld!\n", cnt ); fflush(stdout);
+
 	while (cur_blocks[0].last == false && !m_kill) {
 		//FIXME memcpy
 		kvp0 = ReducerUtils<K,V>::DecodeKvPair(&cur_blocks[0], &in_off0, ma_sources[0], &m_kill);
+		if ( last_read_key0 > kvp0.key ) {
+			printf( "MergerNode key read 0 order wrong! %ld %ld\n", last_read_key0, kvp0.key ); fflush(stdout);
+		}
+		last_read_key0 = kvp0.key;
+		if ( last_emit_key > kvp0.key ) {
+			printf( "MergerNode key emit order wrong! %ld %ld\n", last_emit_key, kvp0.key ); fflush(stdout);
+		}
+		last_emit_key = kvp0.key;
+
 		this->EmitKvPair(kvp0.key, kvp0.val);
+		cnt++;
 	}
 	while (cur_blocks[1].last == false && !m_kill) {
 		//FIXME memcpy
 		kvp1 = ReducerUtils<K,V>::DecodeKvPair(&cur_blocks[1], &in_off1, ma_sources[1], &m_kill);
+		if ( last_read_key1 > kvp1.key ) {
+			printf( "MergerNode key read 1 order wrong! %ld %ld\n", last_read_key1, kvp1.key ); fflush(stdout);
+		}
+		last_read_key1 = kvp1.key;
+		if ( last_emit_key > kvp1.key ) {
+			printf( "MergerNode key emit order wrong! %ld %ld\n", last_emit_key, kvp1.key ); fflush(stdout);
+		}
+		last_emit_key = kvp1.key;
+
 		this->EmitKvPair(kvp1.key, kvp1.val);
+		cnt++;
 	}
 	if ( cur_blocks[0].valid ) ma_sources[0]->ReturnBlock(cur_blocks[0]);
 	if ( cur_blocks[1].valid ) ma_sources[1]->ReturnBlock(cur_blocks[1]);
+	
+	printf( "MergerNode end reached -- %ld!\n", cnt ); fflush(stdout);
 
 	this->FinishEmit();
 }
@@ -820,28 +889,43 @@ SortReduceReducer::ReducerNode<K,V>::WorkerThread() {
 	size_t in_off = 0;
 	SortReduceTypes::Block in_block;
 
-	while ( in_block.valid == false ) {
+	while ( in_block.valid == false && !m_kill ) {
 		in_block = mp_src->GetBlock();
 	}
 	
 	SortReduceTypes::KvPair<K,V> last_kvp = {0};
 
-	if (in_block.last != false) {
+	uint64_t cnt = 0;
+	uint64_t rcnt = 0;
+
+	if (!in_block.last) {
 		last_kvp = ReducerUtils<K,V>::DecodeKvPair(&in_block, &in_off, mp_src, &m_kill);
+		rcnt++;
 	
 		while (in_block.last == false && !m_kill) {
 			SortReduceTypes::KvPair<K,V> kvp = ReducerUtils<K,V>::DecodeKvPair(&in_block, &in_off, mp_src, &m_kill);
+			rcnt++;
 			if ( kvp.key == last_kvp.key ) {
 				last_kvp.val = mp_update(last_kvp.val, kvp.val);
 			} else {
 				this->EmitKv(last_kvp.key, last_kvp.val);
+
+				cnt++;
+				if ( last_kvp.key > kvp.key ) {
+					printf("ReducerNode key order wrong! %ld -- %ld\n", last_kvp.key, kvp.key ); fflush(stdout);
+				}
 				last_kvp = kvp;
+
 			}
 		}
+		this->EmitKv(last_kvp.key, last_kvp.val);
+		cnt++;
 	}
 
 	mp_src->ReturnBlock(in_block);
 	this->EmitFlush();
+
+	printf( "ReducerNode read %ld emitted %ld\n", rcnt, cnt );
 
 	m_done = true;
 }
@@ -1074,7 +1158,9 @@ TEMPLATE_EXPLICIT_INSTANTIATION(SortReduceReducer::StreamFileWriterNode)
 TEMPLATE_EXPLICIT_INSTANTIATION(SortReduceReducer::BlockSource)
 TEMPLATE_EXPLICIT_INSTANTIATION(SortReduceReducer::BlockSourceNode)
 TEMPLATE_EXPLICIT_INSTANTIATION(SortReduceReducer::ReducerNode)
+TEMPLATE_EXPLICIT_INSTANTIATION(SortReduceReducer::MergeReducer)
 TEMPLATE_EXPLICIT_INSTANTIATION(SortReduceReducer::MergerNode)
+TEMPLATE_EXPLICIT_INSTANTIATION(SortReduceReducer::FileReaderNode)
 TEMPLATE_EXPLICIT_INSTANTIATION(SortReduceReducer::StreamMergeReducer)
 TEMPLATE_EXPLICIT_INSTANTIATION(SortReduceReducer::StreamMergeReducer_SinglePriority)
 

@@ -13,10 +13,10 @@ SortReduceUtils::FileKvReader<K,V>::FileKvReader(SortReduceTypes::File* file, So
 
 	this->m_offset = 0;
 	this->m_file_size = file->bytes;
-	printf( "Loading file %s size %lu\n", config->output_filename.c_str(), m_file_size );
+	printf( "Loading file %s size %lu\n", config->output_filename.c_str(), m_file_size ); fflush(stdout);
 
 	// temp
-	this->mp_fp = fopen((config->temporary_directory+config->output_filename).c_str(), "rb");
+	this->mp_fp = fopen((config->temporary_directory+"/"+config->output_filename).c_str(), "rb");
 
 }
 

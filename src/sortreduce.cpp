@@ -33,7 +33,7 @@ SortReduce<K,V>::SortReduce(SortReduceTypes::Config<K,V> *config) {
 	buffer_manager_io->Init(1024*256, 1024*4); //FIXME fixed to 1 GB
 	
 	//Buffers for inter-thread communication (in reducer)
-	AlignedBufferManager* buffer_manager_itc = AlignedBufferManager::GetInstance(1);
+	AlignedBufferManager* buffer_manager_itc = AlignedBufferManager::GetInstance(2);
 	buffer_manager_itc->Init(1024*32, 1024*4); //FIXME fixed size
 	
 
