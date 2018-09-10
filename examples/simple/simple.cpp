@@ -47,7 +47,7 @@ int main(int argc, char** argv) {
 
 	//for ( uint32_t i = 0; i < 1024*1024*128; i++ ) {
 	for ( uint64_t i = 0; i < element_count; i++ ) { //  12 GB
-		uint64_t key = (uint64_t)(rand()&0xffff);
+		uint64_t key = (uint64_t)(rand()&0xfffff);
 		//uint64_t key = 1;
 		//while ( !sr->Update(key, (1<<16)|1, false) );
 		while ( !sr->Update(key, 1) ) {
@@ -89,13 +89,13 @@ int main(int argc, char** argv) {
 		//printf( "%lx %x\n", key, val );
 
 		if ( last_key > key ) {
-			printf( "Result key order wrong %lu %lu\n", last_key, key );
+			printf( "Result key order wrong %lx %lx -- %x\n", last_key, key, val );
 		}
 		last_key = key;
 
 		if ( golden_map.find(key) == golden_map.end() ) {
 			nonexist_count ++;
-			printf( "nonexist %lu -- \n", key );
+			printf( "nonexist %lx -- %x\n", key, val );
 		} else {
 			if ( golden_map[key] != val ) {
 				mismatch_count ++;

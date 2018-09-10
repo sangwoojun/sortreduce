@@ -87,6 +87,7 @@ namespace SortReduceReducer {
 		std::queue<int> mq_ready_idx;
 		std::queue<int> mq_free_idx;
 		std::vector<SortReduceTypes::Block> ma_blocks;
+		int m_cur_free_idx;
 		size_t m_out_offset;
 
 		void EmitKvPair(K key, V val);
@@ -118,8 +119,15 @@ namespace SortReduceReducer {
 		void AddSource(BlockSource<K,V>* src);
 		void Start();
 	private:
+		class CompareKv {
+		public:
+			bool operator() (SortReduceTypes::KvPairSrc<K,V> a, SortReduceTypes::KvPairSrc<K,V> b) {
+				return (a.key > b.key); // This ordering feels wrong, but this is correct
+			}
+		};
 		std::thread m_worker_thread;
 		void WorkerThread2();
+		void WorkerThreadN();
 		bool m_started;
 		bool m_kill;
 

@@ -108,6 +108,12 @@ namespace SortReduceTypes {
 		K key;
 		V val;
 	};
+	template <class K, class V>
+	struct KvPairSrc {
+		K key;
+		V val;
+		int src;
+	};
 
 	class Status {
 	public:
