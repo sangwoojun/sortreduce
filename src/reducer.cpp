@@ -741,29 +741,31 @@ SortReduceReducer::MergerNode<K,V>::WorkerThread2() {
 
 	size_t in_off0 = 0;
 	size_t in_off1 = 0;
-	bool valid0 = false;
-	bool valid1 = false;
 	SortReduceTypes::KvPair<K,V> kvp0 = {0}, kvp1 = {0};
+	if ( cur_blocks[0].last == false ) {
+		kvp0 = ReducerUtils<K,V>::DecodeKvPair(&cur_blocks[0], &in_off0, ma_sources[0], &m_kill);
+	}
+	if ( cur_blocks[1].last == false ) {
+		kvp1 = ReducerUtils<K,V>::DecodeKvPair(&cur_blocks[1], &in_off1, ma_sources[1], &m_kill);
+	}
 	uint64_t cnt = 0;
 
 	while (cur_blocks[0].last == false && cur_blocks[1].last == false && !m_kill) {
-		if ( !valid0 ) {
-			kvp0 = ReducerUtils<K,V>::DecodeKvPair(&cur_blocks[0], &in_off0, ma_sources[0], &m_kill);
-			valid0 = true;
-		}
-		if ( !valid1 ) {
-			kvp1 = ReducerUtils<K,V>::DecodeKvPair(&cur_blocks[1], &in_off1, ma_sources[1], &m_kill);
-			valid1 = true;
-		}
-
 		if ( kvp0.key < kvp1.key ) {
 			this->EmitKvPair(kvp0.key, kvp0.val);
-			valid0 = false;
+			kvp0 = ReducerUtils<K,V>::DecodeKvPair(&cur_blocks[0], &in_off0, ma_sources[0], &m_kill);
 		} else {
 			this->EmitKvPair(kvp1.key, kvp1.val);
-			valid1 = false;
+			kvp1 = ReducerUtils<K,V>::DecodeKvPair(&cur_blocks[1], &in_off1, ma_sources[1], &m_kill);
 		}
 		cnt++;
+	}
+	if ( kvp0.key < kvp1.key ) {
+		this->EmitKvPair(kvp0.key, kvp0.val);
+		this->EmitKvPair(kvp1.key, kvp1.val);
+	} else {
+		this->EmitKvPair(kvp1.key, kvp1.val);
+		this->EmitKvPair(kvp0.key, kvp0.val);
 	}
 	printf( "MergerNode one end reached -- %ld!\n", cnt ); fflush(stdout);
 
