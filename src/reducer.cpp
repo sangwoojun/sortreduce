@@ -472,7 +472,7 @@ SortReduceReducer::ReducerUtils<K,V>::EncodeVal(void* buffer, size_t offset, V v
 
 template <class K, class V>
 inline SortReduceTypes::KvPair<K,V>
-SortReduceReducer::ReducerUtils<K,V>::DecodeKvPair(SortReduceTypes::Block* p_block, size_t* p_off, BlockSource<K,V>* src) {
+SortReduceReducer::ReducerUtils<K,V>::DecodeKvPair(SortReduceTypes::Block* p_block, size_t* p_off, BlockSource<K,V>* src, bool* kill) {
 	SortReduceTypes::KvPair<K,V> kvp = {0};
 	if ( p_block == NULL ) return kvp;
 
@@ -496,7 +496,7 @@ SortReduceReducer::ReducerUtils<K,V>::DecodeKvPair(SortReduceTypes::Block* p_blo
 
 		SortReduceTypes::Block block;
 		block.valid = false;
-		while ( block.valid == false ) {
+		while ( block.valid == false && !kill ) {
 			block = src->GetBlock();
 		}
 		src->ReturnBlock(*p_block);
@@ -512,7 +512,7 @@ SortReduceReducer::ReducerUtils<K,V>::DecodeKvPair(SortReduceTypes::Block* p_blo
 
 		SortReduceTypes::Block block;
 		block.valid = false;
-		while ( block.valid == false ) {
+		while ( block.valid == false && !kill) {
 			block = src->GetBlock();
 		}
 
@@ -529,7 +529,7 @@ SortReduceReducer::ReducerUtils<K,V>::DecodeKvPair(SortReduceTypes::Block* p_blo
 
 		SortReduceTypes::Block block;
 		block.valid = false;
-		while ( block.valid == false ) {
+		while ( block.valid == false && !kill ) {
 			block = src->GetBlock();
 		}
 		memcpy(((uint8_t*)&kvp.key)+avail, block.buffer, debt);
@@ -546,7 +546,6 @@ SortReduceReducer::ReducerUtils<K,V>::DecodeKvPair(SortReduceTypes::Block* p_blo
 template <class K, class V>
 SortReduceReducer::BlockSourceNode<K,V>::BlockSourceNode(size_t block_bytes, int block_count)
 	: SortReduceReducer::BlockSource<K,V>::BlockSource() {
-	m_kill = false;
 
 	for ( int i = 0; i < block_count; i++ ) {
 		SortReduceTypes::Block block;
@@ -563,11 +562,15 @@ SortReduceReducer::BlockSourceNode<K,V>::BlockSourceNode(size_t block_bytes, int
 	}
 	m_out_offset = 0;
 }
+
+
+/**
+IMPORTANT: Reducer three must be deleted in reverse order!
+(Root->Leaf)
+because root destructor calls ReturnBlock of leaf nodes
+**/
 template <class K, class V>
 SortReduceReducer::BlockSourceNode<K,V>::~BlockSourceNode() {
-	m_kill = true;
-	//TODO  return all blocks
-
 	for ( int i = 0; i < ma_blocks.size(); i++ ) {
 		free(ma_blocks[i].buffer);
 	}
@@ -704,7 +707,13 @@ SortReduceReducer::MergerNode<K,V>::MergerNode(size_t block_bytes, int block_cou
 	: SortReduceReducer::BlockSourceNode<K,V>(block_bytes, block_count) {
 
 	m_started = false;
+	m_kill = false;
 
+}
+template <class K, class V>
+SortReduceReducer::MergerNode<K,V>::~MergerNode() {
+	m_kill = true;
+	m_worker_thread.join();
 }
 
 template <class K, class V>
@@ -731,7 +740,7 @@ template <class K, class V>
 void
 SortReduceReducer::MergerNode<K,V>::WorkerThread2() {
 	SortReduceTypes::Block cur_blocks[2];
-	for ( int i = 0; i < 2; i++ ) {
+	for ( int i = 0; i < 2 && !m_kill; i++ ) {
 		SortReduceTypes::Block block;
 		block.valid = false;
 		while ( block.valid == false ) {
@@ -748,13 +757,13 @@ SortReduceReducer::MergerNode<K,V>::WorkerThread2() {
 	bool valid1 = false;
 	SortReduceTypes::KvPair<K,V> kvp0 = {0}, kvp1 = {0};
 
-	while (cur_blocks[0].last == false && cur_blocks[1].last == false) {
+	while (cur_blocks[0].last == false && cur_blocks[1].last == false && !m_kill) {
 		if ( !valid0 ) {
-			kvp0 = ReducerUtils<K,V>::DecodeKvPair(&cur_blocks[0], &in_off0, ma_sources[0]);
+			kvp0 = ReducerUtils<K,V>::DecodeKvPair(&cur_blocks[0], &in_off0, ma_sources[0], &m_kill);
 			valid0 = true;
 		}
 		if ( !valid1 ) {
-			kvp1 = ReducerUtils<K,V>::DecodeKvPair(&cur_blocks[1], &in_off1, ma_sources[1]);
+			kvp1 = ReducerUtils<K,V>::DecodeKvPair(&cur_blocks[1], &in_off1, ma_sources[1], &m_kill);
 			valid1 = true;
 		}
 
@@ -766,18 +775,18 @@ SortReduceReducer::MergerNode<K,V>::WorkerThread2() {
 			valid1 = false;
 		}
 	}
-	while (cur_blocks[0].last == false) {
+	while (cur_blocks[0].last == false && !m_kill) {
 		//FIXME memcpy
-		kvp0 = ReducerUtils<K,V>::DecodeKvPair(&cur_blocks[0], &in_off0, ma_sources[0]);
+		kvp0 = ReducerUtils<K,V>::DecodeKvPair(&cur_blocks[0], &in_off0, ma_sources[0], &m_kill);
 		this->EmitKvPair(kvp0.key, kvp0.val);
 	}
-	while (cur_blocks[1].last == false) {
+	while (cur_blocks[1].last == false && !m_kill) {
 		//FIXME memcpy
-		kvp1 = ReducerUtils<K,V>::DecodeKvPair(&cur_blocks[1], &in_off1, ma_sources[1]);
+		kvp1 = ReducerUtils<K,V>::DecodeKvPair(&cur_blocks[1], &in_off1, ma_sources[1], &m_kill);
 		this->EmitKvPair(kvp1.key, kvp1.val);
 	}
-	ma_sources[0]->ReturnBlock(cur_blocks[0]);
-	ma_sources[1]->ReturnBlock(cur_blocks[1]);
+	if ( cur_blocks[0].valid ) ma_sources[0]->ReturnBlock(cur_blocks[0]);
+	if ( cur_blocks[1].valid ) ma_sources[1]->ReturnBlock(cur_blocks[1]);
 
 	this->FinishEmit();
 }
@@ -788,9 +797,16 @@ SortReduceReducer::ReducerNode<K,V>::ReducerNode(V (*update)(V,V), std::string t
 	m_done = false;
 
 	mp_update = update;
-
-
+	m_kill = false;
 }
+
+template <class K, class V>
+SortReduceReducer::ReducerNode<K,V>::~ReducerNode() {
+	m_kill = true;
+	m_worker_thread.join();
+}
+
+
 template <class K, class V>
 void
 SortReduceReducer::ReducerNode<K,V>::SetSource( BlockSource<K,V>* src) {
@@ -811,10 +827,10 @@ SortReduceReducer::ReducerNode<K,V>::WorkerThread() {
 	SortReduceTypes::KvPair<K,V> last_kvp = {0};
 
 	if (in_block.last != false) {
-		last_kvp = ReducerUtils<K,V>::DecodeKvPair(&in_block, &in_off, mp_src);
+		last_kvp = ReducerUtils<K,V>::DecodeKvPair(&in_block, &in_off, mp_src, &m_kill);
 	
-		while (in_block.last == false) {
-			SortReduceTypes::KvPair<K,V> kvp = ReducerUtils<K,V>::DecodeKvPair(&in_block, &in_off, mp_src);
+		while (in_block.last == false && !m_kill) {
+			SortReduceTypes::KvPair<K,V> kvp = ReducerUtils<K,V>::DecodeKvPair(&in_block, &in_off, mp_src, &m_kill);
 			if ( kvp.key == last_kvp.key ) {
 				last_kvp.val = mp_update(last_kvp.val, kvp.val);
 			} else {

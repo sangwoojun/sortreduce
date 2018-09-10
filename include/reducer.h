@@ -71,6 +71,7 @@ namespace SortReduceReducer {
 	template <class K, class V>
 	class BlockSource {
 	public:
+		virtual ~BlockSource() = 0;
 		virtual SortReduceTypes::Block GetBlock() = 0;
 		virtual void ReturnBlock(SortReduceTypes::Block block) = 0;
 	};
@@ -79,7 +80,7 @@ namespace SortReduceReducer {
 	class BlockSourceNode : public BlockSource<K,V> {
 	public:
 		BlockSourceNode(size_t block_bytes, int block_count);
-		~BlockSourceNode();
+		virtual ~BlockSourceNode();
 		SortReduceTypes::Block GetBlock();
 		void ReturnBlock(SortReduceTypes::Block block);
 	protected:
@@ -95,9 +96,6 @@ namespace SortReduceReducer {
 		**/
 		void FinishEmit();
 		
-		bool m_kill;
-
-
 		std::mutex m_mutex;
 	};
 
@@ -116,12 +114,14 @@ namespace SortReduceReducer {
 	class MergerNode : public BlockSourceNode<K,V> {
 	public:
 		MergerNode(size_t block_bytes, int block_count); //FIXME should use buffer manager!
+		~MergerNode();
 		void AddSource(BlockSource<K,V>* src);
 		void Start();
 	private:
 		std::thread m_worker_thread;
 		void WorkerThread2();
 		bool m_started;
+		bool m_kill;
 
 		std::vector<BlockSource<K,V>*> ma_sources;
 
@@ -131,6 +131,7 @@ namespace SortReduceReducer {
 	class ReducerNode : public StreamFileWriterNode<K,V> {
 	public:
 		ReducerNode(V (*update)(V,V), std::string temp_directory, std::string filename = "");
+		~ReducerNode();
 		void SetSource(BlockSource<K,V>* src);
 		bool IsDone() { return m_done; };
 	private:
@@ -139,6 +140,7 @@ namespace SortReduceReducer {
 		std::thread m_worker_thread;
 		void WorkerThread();
 		bool m_done;
+		bool m_kill;
 
 		V (*mp_update)(V,V);
 	};
@@ -146,7 +148,7 @@ namespace SortReduceReducer {
 	template <class K, class V>
 	class ReducerUtils {
 	public:
-		static SortReduceTypes::KvPair<K,V> DecodeKvPair(SortReduceTypes::Block* block, size_t* p_off, BlockSource<K,V>* src);
+		static SortReduceTypes::KvPair<K,V> DecodeKvPair(SortReduceTypes::Block* block, size_t* p_off, BlockSource<K,V>* src, bool* kill);
 		static K DecodeKey(void* buffer, size_t offset);
 		static V DecodeVal(void* buffer, size_t offset);
 		static void EncodeKvp(void* buffer, size_t offset, K key, V val);

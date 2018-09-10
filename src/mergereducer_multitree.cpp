@@ -18,10 +18,9 @@ template <class K, class V>
 SortReduceReducer::MergeReducer_MultiTree<K,V>::~MergeReducer_MultiTree() {
 	delete mp_reducer_node;
 
-	for ( int i = 0; i < mv_tree_nodes_seq.size(); i++ ) {
+	for ( int i = mv_tree_nodes_seq.size()-1; i >= 0; i-- ) {
 		delete mv_tree_nodes_seq[i];
 	}
-
 }
 
 template <class K, class V>
