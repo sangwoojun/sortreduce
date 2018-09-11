@@ -89,6 +89,7 @@ namespace SortReduceTypes {
 	//private:
 
 		std::string temporary_directory;
+		// If not set, file is not created, and can only be read via "Next"
 		std::string output_filename;
 
 		int maximum_threads;

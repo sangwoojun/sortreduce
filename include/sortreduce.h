@@ -105,6 +105,7 @@ private:
 	std::priority_queue<SortReduceTypes::File*,std::vector<SortReduceTypes::File*>, SortReduceTypes::CompareFileSize> m_file_priority_queue;
 
 	SortReduceUtils::FileKvReader<K,V>* mp_file_kv_reader = NULL;
+	SortReduceReducer::BlockSourceReader<K,V>* mp_result_stream_reader = NULL;
 
 };
 

@@ -88,6 +88,7 @@ SortReduce<K,V>::CheckStatus() {
 	status.done_input = m_done_input;
 	status.done_inmem = m_done_inmem;
 	status.done_external = m_done_external;
+
 	if ( m_done_external ) {
 		if ( m_file_priority_queue.size() != 1 ) {
 			fprintf(stderr, "Sort-Reduce is done, but m_file_priority_queue has %lu elements\n", m_file_priority_queue.size() );
@@ -156,11 +157,20 @@ SortReduce<K,V>::Finish() {
 template <class K, class V>
 inline std::tuple<K,V,bool>
 SortReduce<K,V>::Next() {
-	if ( mp_file_kv_reader == NULL ) {
-		return std::make_tuple(0,0,false);
+	if ( mp_file_kv_reader != NULL ) {
+		return mp_file_kv_reader->Next();
+	}
+	
+	if ( mp_result_stream_reader != NULL ) {
+		bool empty = mp_result_stream_reader->Empty();
+		if ( !empty ) {
+			SortReduceTypes::KvPair<K,V> kvp = mp_result_stream_reader->GetNext();
+
+			return std::make_tuple(kvp.key,kvp.val,true);
+		}
 	}
 
-	return mp_file_kv_reader->Next();
+	return std::make_tuple(0,0,false);
 }
 
 template <class K, class V>
@@ -338,9 +348,15 @@ SortReduce<K,V>::ManagerThread() {
 			//SortReduceReducer::StreamMergeReducer<K,V>* merger;
 			SortReduceReducer::MergeReducer<K,V>* merger;
 			if ( last_merge ) {
-				//FIXME DOES THIS WORK?
 				//merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory, m_config->output_filename);
-				merger = new SortReduceReducer::MergeReducer_MultiTree<K,V>(m_config->update, m_config->temporary_directory, m_config->output_filename);
+				if ( m_config->output_filename == "" ) {
+					SortReduceReducer::MergeReducer_MultiTree<K,V>* mmerger = new SortReduceReducer::MergeReducer_MultiTree<K,V>(m_config->update, m_config->temporary_directory);
+					mp_result_stream_reader = mmerger->GetResultReader();
+					merger = mmerger;
+				} else {
+					merger = new SortReduceReducer::MergeReducer_MultiTree<K,V>(m_config->update, m_config->temporary_directory, m_config->output_filename);
+				}
+
 			} else {
 				// Invisible temporary file
 				merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory);
@@ -444,9 +460,17 @@ SortReduce<K,V>::ManagerThread() {
 		}
 
 		if ( !m_done_external && m_done_input && m_done_inmem && !m_reduce_phase &&
-			m_file_priority_queue.size() == 1 && mv_stream_mergers_from_storage.empty() ) {
+			
+			(
+				(m_file_priority_queue.size() == 1 && mv_stream_mergers_from_storage.empty()) 
+				|| (mp_result_stream_reader != NULL )
+			)
+			
+			) {
 
-			mp_file_kv_reader = new SortReduceUtils::FileKvReader<K,V>(m_file_priority_queue.top(), m_config);
+			if ( mp_result_stream_reader == NULL ) {
+				mp_file_kv_reader = new SortReduceUtils::FileKvReader<K,V>(m_file_priority_queue.top(), m_config);
+			}
 
 			m_done_external = true;
 

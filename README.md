@@ -30,6 +30,15 @@ The library can be either built into a .a file or be used by building and linkin
 
 libsortreduce.a can be built simply by running **make**
 
+
+### Key-Value types in the library
+
+The key and value types the library can handle can be specified in the Makefile.
+
+Compiler flags **KTYPES1**,  **KTYPES2**,  **KTYPES3**, and **KTYPES4** can be used to specify which types the library can handle.
+See the example flags set in the default Makefile.
+
+
 ## Usage
 
 The library is templatized with the array index (key) and argument (value) types.
@@ -46,6 +55,14 @@ SortReduce<uint64_t,uint32_t>* sr = new SortReduce<uint64_t,uint32_t>(conf);
 The above code uses "/mnt/ssd0/scratch/" for temporary and output directories, allows up to 16 threads to be used, and stores the sort-reduced array at "/mnt/ssd0/scratch/output.dat".
 The user-defined update function is given as update_function, and assigns 4 GB of memory (64x 32 MB blocks).
 Block size will be automatically adjusted in the future. For now, 32 MB is a good number.
+
+If the output filename is set to "", the library will not create a named file.
+Instead, the sort-reduce results can be streamed out directly without having to be written to storage first, improving performance.
+If you do not require an explicit result file to exist in storage, using an empty string as the output filename can be a better solution, like the following:
+
+```
+SortReduceTypes::Config<uint64_t,uint32_t>* conf = new SortReduceTypes::Config<uint64_t,uint32_t>("/mnt/ssd0/scratch/", "", 16);
+```
 
 An example update function for building histograms can be seen below.
 

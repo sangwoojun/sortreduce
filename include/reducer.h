@@ -84,6 +84,7 @@ namespace SortReduceReducer {
 		SortReduceTypes::Block GetBlock();
 		void ReturnBlock(SortReduceTypes::Block block);
 	protected:
+		int m_block_count;
 		std::queue<int> mq_ready_idx;
 		std::queue<int> mq_free_idx;
 		std::vector<SortReduceTypes::Block> ma_blocks;
@@ -151,6 +152,39 @@ namespace SortReduceReducer {
 		bool m_kill;
 
 		V (*mp_update)(V,V);
+	};
+	
+	template <class K, class V>
+	class ReducerNodeStream : public BlockSourceNode<K,V> {
+	public:
+		ReducerNodeStream(V (*update)(V,V), size_t block_bytes, int block_count);
+		~ReducerNodeStream();
+		void SetSource(BlockSource<K,V>* src);
+		bool IsDone();
+	private:
+		BlockSource<K,V>* mp_src;
+
+		std::thread m_worker_thread;
+		void WorkerThread();
+		bool m_done;
+		bool m_kill;
+
+		V (*mp_update)(V,V);
+	};
+
+	template <class K, class V>
+	class BlockSourceReader {
+	public:
+		BlockSourceReader(BlockSource<K,V>* src);
+		SortReduceTypes::KvPair<K,V> GetNext();
+		bool Empty();
+	private:
+		BlockSource<K,V>* mp_src;
+		bool m_done;
+		bool m_kill;
+
+		SortReduceTypes::Block m_block;
+		size_t m_offset;
 	};
 
 	template <class K, class V>

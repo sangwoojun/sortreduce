@@ -25,9 +25,13 @@ namespace SortReduceReducer {
 		void Start();
 		bool IsDone();
 
-		SortReduceTypes::File* GetOutFile() {return this->mp_reducer_node->GetOutFile(); };
+		SortReduceTypes::File* GetOutFile();
 
 		size_t GetInputFileBytes() { return this->m_input_file_bytes; };
+
+
+		//for ReducerNodeStream
+		BlockSourceReader<K,V>* GetResultReader();
 	private:
 
 		bool m_started;
@@ -38,7 +42,10 @@ namespace SortReduceReducer {
 		std::vector<std::vector<BlockSource<K,V>*>> mvv_tree_nodes;
 		std::vector<BlockSourceNode<K,V>*> mv_tree_nodes_seq; // for easy deleting
 
-		ReducerNode<K,V>* mp_reducer_node;
+		ReducerNode<K,V>* mp_reducer_node_to_file;
+		ReducerNodeStream<K,V>* mp_reducer_node_stream;
+
+		BlockSourceReader<K,V>* mp_block_source_reader;
 
 		SortReduceTypes::File* mp_out_file;
 		size_t m_input_file_bytes = 0;

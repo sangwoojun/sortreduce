@@ -9,14 +9,27 @@ SortReduceReducer::MergeReducer_MultiTree<K,V>::MergeReducer_MultiTree(V (*updat
 	this->mp_update = update;
 
 	this->mp_stream_file_reader = new StreamFileReader(temp_directory, verbose);
-	this->mp_reducer_node = new ReducerNode<K,V>(update, temp_directory, filename);
+	if ( filename == "" ) {
+		this->mp_reducer_node_stream = new ReducerNodeStream<K,V>(update, 1024*1024, 4);
+		this->mp_block_source_reader = new BlockSourceReader<K,V>(mp_reducer_node_stream);
+		this->mp_reducer_node_to_file = NULL;
+	} else {
+		this->mp_reducer_node_to_file = new ReducerNode<K,V>(update, temp_directory, filename);
+		this->mp_reducer_node_stream = NULL;
+		this->mp_block_source_reader = NULL;
+	}
 
 	this->mvv_tree_nodes.push_back(std::vector<BlockSource<K,V>*>());
 }
 
 template <class K, class V>
 SortReduceReducer::MergeReducer_MultiTree<K,V>::~MergeReducer_MultiTree() {
-	delete mp_reducer_node;
+	if ( mp_reducer_node_stream != NULL ) {
+		delete mp_reducer_node_stream;
+	}
+	if ( mp_reducer_node_to_file != NULL ) {
+		delete mp_reducer_node_to_file;
+	}
 
 	for ( int i = mv_tree_nodes_seq.size()-1; i >= 0; i-- ) {
 		delete mv_tree_nodes_seq[i];
@@ -98,14 +111,45 @@ SortReduceReducer::MergeReducer_MultiTree<K,V>::Start() {
 		cur_level++;
 	}
 
-	mp_reducer_node->SetSource(mvv_tree_nodes[cur_level][0]);
+	if ( mp_reducer_node_stream != NULL ) {
+		mp_reducer_node_stream->SetSource(mvv_tree_nodes[cur_level][0]);
+	} else if ( mp_reducer_node_to_file != NULL ) {
+		mp_reducer_node_to_file->SetSource(mvv_tree_nodes[cur_level][0]);
+	} else {
+		printf( "ERROR: MergeReducer_MultiTree reducer node not set! %s:%d\n", __FILE__, __LINE__ );
+	}
 }
 
 template <class K, class V>
 bool
 SortReduceReducer::MergeReducer_MultiTree<K,V>::IsDone() {
-	return mp_reducer_node->IsDone();
+	if ( mp_reducer_node_stream != NULL ) {
+		return mp_reducer_node_stream->IsDone();
+	}
+	if ( mp_reducer_node_to_file != NULL ) {
+		return mp_reducer_node_to_file->IsDone();
+	}
+
+	printf( "ERROR: MergeReducer_MultiTree reducer node not set! %s:%d\n", __FILE__, __LINE__ );
+	return false;
 }
+
+template <class K, class V>
+SortReduceTypes::File* 
+SortReduceReducer::MergeReducer_MultiTree<K,V>::GetOutFile() {
+	if ( mp_reducer_node_to_file != NULL ) {
+		return this->mp_reducer_node_to_file->GetOutFile(); 
+	} 
+
+	return NULL;
+}
+
+template <class K, class V>
+SortReduceReducer::BlockSourceReader<K,V>* 
+SortReduceReducer::MergeReducer_MultiTree<K,V>::GetResultReader() {
+	return mp_block_source_reader;
+}
+
 
 
 
