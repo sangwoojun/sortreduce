@@ -316,8 +316,10 @@ SortReduce<K,V>::ManagerThread() {
 		// if GetOutBlock() returns more than ...say 16, spawn a merge-reducer
 		size_t temp_file_count = m_file_priority_queue.size();
 		if ( (m_done_inmem||m_reduce_phase) && 
-			(((m_done_inmem||m_reduce_phase)&&temp_file_count>1&&mv_stream_mergers_from_storage.empty()) || 
-			temp_file_count >= 16) 
+			(
+				(temp_file_count>1&&mv_stream_mergers_from_storage.empty()) || 
+				temp_file_count >= 16
+			) 
 
 			//((m_done_inmem&&temp_file_count>1) || temp_file_count >= 16) 
 			&& mv_stream_mergers_from_storage.size() < m_maximum_threads 
