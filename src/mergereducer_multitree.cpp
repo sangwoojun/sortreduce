@@ -76,14 +76,15 @@ SortReduceReducer::MergeReducer_MultiTree<K,V>::Start() {
 	while (cur_level_count > 1) {
 		mvv_tree_nodes.push_back(std::vector<BlockSource<K,V>*>());
 
+
 		if ( cur_level_count > maximum_2to1_nodes*2 ) {
 			int leaves_per_node = cur_level_count/maximum_2to1_nodes;
 			int node_count = maximum_2to1_nodes;
 
 			for ( int i = 0; i < node_count; i++ ) {
-				MergerNode<K,V>* merger = new MergerNode<K,V>(1024*1024, 4);
+				MergerNode<K,V>* merger = new MergerNode<K,V>(1024*1024, 4, cur_level);
 				for ( int j = 0; j < leaves_per_node; j++ ) {
-					if ( i*leaves_per_node+j >= mvv_tree_nodes[cur_level].size() ) break;
+					if ( (size_t)i*leaves_per_node+j >= mvv_tree_nodes[cur_level].size() ) break;
 
 					merger->AddSource(mvv_tree_nodes[cur_level][i*leaves_per_node+j]);
 				}
@@ -94,7 +95,7 @@ SortReduceReducer::MergeReducer_MultiTree<K,V>::Start() {
 			}
 		} else {
 			for ( int i = 0; i < cur_level_count/2; i++ ) {
-				MergerNode<K,V>* merger = new MergerNode<K,V>(1024*1024, 4);
+				MergerNode<K,V>* merger = new MergerNode<K,V>(1024*1024, 4, cur_level);
 				merger->AddSource(mvv_tree_nodes[cur_level][i*2]);
 				merger->AddSource(mvv_tree_nodes[cur_level][i*2+1]);
 				merger->Start();

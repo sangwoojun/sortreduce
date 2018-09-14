@@ -32,10 +32,11 @@ SortReduce<K,V>::SortReduce(SortReduceTypes::Config<K,V> *config) {
 	AlignedBufferManager* buffer_manager_io = AlignedBufferManager::GetInstance(1);
 	buffer_manager_io->Init(1024*256, 1024*4); //FIXME fixed to 1 GB
 	
+	/*
 	//Buffers for inter-thread communication (in reducer)
 	AlignedBufferManager* buffer_manager_itc = AlignedBufferManager::GetInstance(2);
 	buffer_manager_itc->Init(1024*32, 1024*4); //FIXME fixed size
-	
+	*/
 
 	this->m_config = config;
 	if ( config->update == NULL ) {
@@ -289,7 +290,7 @@ SortReduce<K,V>::ManagerThread() {
 					if ( threads_available > 0 ) {
 						reducer_from_mem_max_count ++;
 						printf( "reducer_from_mem_max_count %d << %d\n", reducer_from_mem_max_count, threads_available ); fflush(stdout);
-					} else if ( reducer_from_mem_fan_in_max * reducer_from_mem_max_count + block_sorter_thread_count < m_config->buffer_count ) {
+					} else if ( reducer_from_mem_fan_in_max * reducer_from_mem_max_count + block_sorter_thread_count < (size_t)m_config->buffer_count ) {
 						// delete sorter thread
 						// reducer_from_mem_max_count can be increased next
 						if ( block_sorter_thread_count > 1 ) {
@@ -328,19 +329,18 @@ SortReduce<K,V>::ManagerThread() {
 		if ( (m_done_inmem||m_reduce_phase) && 
 			(
 				(temp_file_count>1&&mv_stream_mergers_from_storage.empty()) || 
-				temp_file_count >= 16
+				temp_file_count >= (size_t)(m_maximum_threads*8) // FIXME too much?
 			) 
 
 			//((m_done_inmem&&temp_file_count>1) || temp_file_count >= 16) 
-			&& mv_stream_mergers_from_storage.size() < m_maximum_threads 
-			&& mv_stream_mergers_from_storage.size() < 16 // FIXME
+			&& mv_stream_mergers_from_storage.size() < (size_t)m_maximum_threads 
+			&& mv_stream_mergers_from_storage.size() < 32 // FIXME
 			) {
 			
 			int to_sort = temp_file_count>32?32:temp_file_count;
 
 			bool last_merge = false;
-			if ( m_done_inmem && mv_stream_mergers_from_storage.empty() 
-				&& temp_file_count <= 32 ) {
+			if ( m_done_inmem && mv_stream_mergers_from_storage.empty() ) {
 
 				last_merge = true;
 			}
@@ -363,7 +363,7 @@ SortReduce<K,V>::ManagerThread() {
 			}
 
 			//size_t last_bytes = 0;
-			for ( size_t i = 0; i < to_sort; i++ ) {
+			for ( int i = 0; i < to_sort; i++ ) {
 				SortReduceTypes::File* file = m_file_priority_queue.top();
 
 				m_file_priority_queue.pop();
@@ -384,7 +384,7 @@ SortReduce<K,V>::ManagerThread() {
 			mv_stream_mergers_from_storage.push_back(merger);
 		}
 
-		for ( int i = 0; i < mv_stream_mergers_from_storage.size(); ) {
+		for ( int i = 0; (size_t)i < mv_stream_mergers_from_storage.size(); ) {
 			SortReduceReducer::MergeReducer<K,V>* reducer = mv_stream_mergers_from_storage[i];
 			if ( reducer->IsDone() ) {
 				SortReduceTypes::File* reduced_file = reducer->GetOutFile();
@@ -410,12 +410,12 @@ SortReduce<K,V>::ManagerThread() {
 
 		size_t sorted_blocks_cnt = mp_block_sorter->GetOutBlockCount();
 		if ( !m_reduce_phase && ((m_done_input && sorted_blocks_cnt>0&&mv_stream_mergers_from_mem.empty()) || sorted_blocks_cnt >= reducer_from_mem_fan_in) 
-			&& mv_stream_mergers_from_mem.size() < reducer_from_mem_max_count ) {
+			&& mv_stream_mergers_from_mem.size() < (size_t)reducer_from_mem_max_count ) {
 
 			SortReduceReducer::StreamMergeReducer<K,V>* merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory);
 			int to_sort = (sorted_blocks_cnt > reducer_from_mem_fan_in_max)?reducer_from_mem_fan_in_max:sorted_blocks_cnt; //TODO
 			
-			for ( size_t i = 0; i < to_sort; i++ ) {
+			for ( int i = 0; i < to_sort; i++ ) {
 				SortReduceTypes::Block block = mp_block_sorter->GetOutBlock();
 				block.last = true;
 				merger->PutBlock(block);
@@ -427,7 +427,7 @@ SortReduce<K,V>::ManagerThread() {
 			mv_stream_mergers_from_mem.push_back(merger);
 		}
 
-		for ( int i = 0; i < mv_stream_mergers_from_mem.size(); ) {
+		for ( size_t i = 0; i < mv_stream_mergers_from_mem.size(); ) {
 			SortReduceReducer::StreamMergeReducer<K,V>* reducer = mv_stream_mergers_from_mem[i];
 			if ( reducer->IsDone() ) {
 				SortReduceTypes::File* reduced_file = reducer->GetOutFile();

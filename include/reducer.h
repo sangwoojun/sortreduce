@@ -79,11 +79,12 @@ namespace SortReduceReducer {
 	template <class K, class V>
 	class BlockSourceNode : public BlockSource<K,V> {
 	public:
-		BlockSourceNode(size_t block_bytes, int block_count);
+		BlockSourceNode(size_t block_bytes, int block_count, int my_id);
 		virtual ~BlockSourceNode();
 		SortReduceTypes::Block GetBlock();
 		void ReturnBlock(SortReduceTypes::Block block);
 	protected:
+		int m_my_id = -1;
 		int m_block_count;
 		std::queue<int> mq_ready_idx;
 		std::queue<int> mq_free_idx;
@@ -91,6 +92,7 @@ namespace SortReduceReducer {
 		int m_cur_free_idx;
 		size_t m_out_offset;
 
+		K m_last_key = 0;
 		void EmitKvPair(K key, V val);
 		/**
 		Flushes, and emits a block with "last" flag set.
@@ -99,6 +101,21 @@ namespace SortReduceReducer {
 		void FinishEmit();
 		
 		std::mutex m_mutex;
+	};
+	
+	template <class K, class V>
+	class BlockKvReader {
+	public:
+		BlockKvReader(BlockSource<K,V>* src);
+		~BlockKvReader();
+		bool IsEmpty();
+		SortReduceTypes::KvPair<K,V> GetNext();
+	private:
+		BlockSource<K,V>* mp_src = NULL;
+
+		size_t m_offset;
+		SortReduceTypes::Block m_cur_block;
+		bool m_done;
 	};
 
 	template <class K, class V>
@@ -115,7 +132,7 @@ namespace SortReduceReducer {
 	template <class K, class V>
 	class MergerNode : public BlockSourceNode<K,V> {
 	public:
-		MergerNode(size_t block_bytes, int block_count); //FIXME should use buffer manager!
+		MergerNode(size_t block_bytes, int block_count, int my_id = -1); //FIXME should use buffer manager!
 		~MergerNode();
 		void AddSource(BlockSource<K,V>* src);
 		void Start();
@@ -193,6 +210,7 @@ namespace SortReduceReducer {
 		static SortReduceTypes::KvPair<K,V> DecodeKvPair(SortReduceTypes::Block* block, size_t* p_off, BlockSource<K,V>* src, bool* kill);
 		static K DecodeKey(void* buffer, size_t offset);
 		static V DecodeVal(void* buffer, size_t offset);
+		static SortReduceTypes::KvPair<K,V> DecodeKvp(void* buffer, size_t offset);
 		static void EncodeKvp(void* buffer, size_t offset, K key, V val);
 		static void EncodeKey(void* buffer, size_t offset, K key);
 		static void EncodeVal(void* buffer, size_t offset, V val);

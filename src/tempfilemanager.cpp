@@ -206,7 +206,9 @@ TempFileManager::Read(SortReduceTypes::File* file, size_t offset, size_t bytes, 
 		}
 		size_t ofrag = offset & 0x1ff;
 		if ( ofrag != 0 ) {
-			offset = bytes-frag;
+			offset = offset-ofrag;
+			printf("TempFileManager::Read offset should always be 512 bytes aligned!\n");
+			fflush(stdout);
 		}
 
 		//memset(buffer, 0xcc, bytes);
