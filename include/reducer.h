@@ -133,6 +133,7 @@ namespace SortReduceReducer {
 	class MergerNode : public BlockSourceNode<K,V> {
 	public:
 		MergerNode(size_t block_bytes, int block_count, int my_id = -1); //FIXME should use buffer manager!
+		MergerNode(size_t block_bytes, int block_count, V (*update)(V,V), int my_id = -1); //FIXME should use buffer manager!
 		~MergerNode();
 		void AddSource(BlockSource<K,V>* src);
 		void Start();
@@ -150,6 +151,9 @@ namespace SortReduceReducer {
 		bool m_kill;
 
 		std::vector<BlockSource<K,V>*> ma_sources;
+
+
+		V (*mp_update)(V,V) = NULL;
 
 	};
 

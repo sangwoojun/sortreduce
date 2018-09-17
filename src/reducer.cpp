@@ -657,11 +657,12 @@ SortReduceReducer::BlockSourceNode<K,V>::ReturnBlock(SortReduceTypes::Block bloc
 template <class K, class V>
 void
 SortReduceReducer::BlockSourceNode<K,V>::EmitKvPair(K key, V val) {
+/*
 	if ( m_last_key > key ) {
 		printf("EmitKvPair order wrong %d %lx %lx\n", m_my_id, (uint64_t)m_last_key, (uint64_t)key);
 	}
 	m_last_key = key;
-
+*/
 	SortReduceTypes::Block block = ma_blocks[m_cur_free_idx];
 	size_t avail = block.bytes - m_out_offset;
 
@@ -825,7 +826,16 @@ SortReduceReducer::MergerNode<K,V>::MergerNode(size_t block_bytes, int block_cou
 
 	m_started = false;
 	m_kill = false;
+	mp_update = NULL;
+}
 
+template <class K, class V>
+SortReduceReducer::MergerNode<K,V>::MergerNode(size_t block_bytes, int block_count, V (*update)(V,V), int my_id) 
+	: SortReduceReducer::BlockSourceNode<K,V>(block_bytes, block_count, my_id) {
+
+	m_started = false;
+	m_kill = false;
+	mp_update = update;
 }
 template <class K, class V>
 SortReduceReducer::MergerNode<K,V>::~MergerNode() {
@@ -861,47 +871,48 @@ SortReduceReducer::MergerNode<K,V>::WorkerThread2() {
 	readers[0] = new BlockKvReader<K,V>(ma_sources[0]);
 	readers[1] = new BlockKvReader<K,V>(ma_sources[1]);
 
-	bool valid[2] = {false, false};
-	SortReduceTypes::KvPair<K,V> kvp[2];
+	SortReduceTypes::KvPair<K,V> kvp[2] = {0};
 		
 	for ( int i = 0; i < 2; i++ ) {
-		if ( !valid[i] && !readers[i]->IsEmpty() ) {
+		if ( !readers[i]->IsEmpty() ) {
 			kvp[i] = readers[i]->GetNext();
-			valid[i] = true;
 		}
 	}
 
-	uint64_t cnt = 0;
-	while ( (valid[0] || valid[1]) && !m_kill ) {
-		if (valid[0] && valid[1]) {
+	if ( !readers[0]->IsEmpty() && !readers[1]->IsEmpty() ) {
+		while (true) {
 			if ( kvp[0].key < kvp[1].key ) {
 				this->EmitKvPair(kvp[0].key, kvp[0].val);
-				cnt++;
-				valid[0] = false;
+				if ( !readers[0]->IsEmpty() ) {
+					kvp[0] = readers[0]->GetNext();
+				} else break;
 			} else {
 				this->EmitKvPair(kvp[1].key, kvp[1].val);
-				cnt++;
-				valid[1] = false;
-			}
-		} else if (valid[0]) {
-			this->EmitKvPair(kvp[0].key, kvp[0].val);
-			cnt++;
-			valid[0] = false;
-		} else {
-			this->EmitKvPair(kvp[1].key, kvp[1].val);
-			cnt++;
-			valid[1] = false;
-		}
-
-		for ( int i = 0; i < 2; i++ ) {
-			if ( !valid[i] && !readers[i]->IsEmpty() ) {
-				kvp[i] = readers[i]->GetNext();
-				valid[i] = true;
+				if ( !readers[1]->IsEmpty() ) {
+					kvp[1] = readers[1]->GetNext();
+				} else break;
 			}
 		}
 	}
 
-	printf( "MergerNode end reached -- %ld!\n", cnt ); fflush(stdout);
+	if ( !readers[0]->IsEmpty() ) {
+		while (true) {
+			this->EmitKvPair(kvp[0].key, kvp[0].val);
+			if ( !readers[0]->IsEmpty() ) {
+				kvp[0] = readers[0]->GetNext();
+			} else break;
+		}
+	}
+	if ( !readers[1]->IsEmpty() ) {
+		while ( true ) {
+			this->EmitKvPair(kvp[1].key, kvp[1].val);
+			if ( !readers[1]->IsEmpty() ) {
+				kvp[1] = readers[1]->GetNext();
+			} else break;
+		}
+	}
+
+	//printf( "MergerNode end reached -- %ld!\n", cnt ); fflush(stdout);
 
 	this->FinishEmit();
 
@@ -922,10 +933,11 @@ SortReduceReducer::MergerNode<K,V>::WorkerThreadN() {
 	std::vector<SortReduceTypes::Block> cur_blocks;
 	std::vector<size_t> in_off(source_count, 0);
 	//std::vector<K> last_keys;
+	SortReduceTypes::KvPair<K,V> last_kvp = {0};
 	
 	std::vector<BlockKvReader<K,V>*> readers;
 
-	uint64_t cnt = 0;
+	//uint64_t cnt = 0;
 
 	for ( int i = 0; i < source_count; i++ ) {
 		BlockKvReader<K,V>* reader = new BlockKvReader<K,V>(ma_sources[i]);
@@ -944,6 +956,28 @@ SortReduceReducer::MergerNode<K,V>::WorkerThreadN() {
 
 	//K last_key = 0;
 
+	if ( !priority_queue.empty() ) {
+		SortReduceTypes::KvPairSrc<K,V> kvp = priority_queue.top();
+		priority_queue.pop();
+		int src = kvp.src;
+
+		if ( mp_update == NULL ) {
+			this->EmitKvPair(kvp.key, kvp.val);
+		} else {
+			last_kvp.key = kvp.key;
+			last_kvp.val = kvp.val;
+		}
+		
+		if ( !readers[src]->IsEmpty() ) {
+			SortReduceTypes::KvPair<K,V> kvp = readers[src]->GetNext();
+			SortReduceTypes::KvPairSrc<K,V> kvps;
+			kvps.key = kvp.key;
+			kvps.val = kvp.val;
+			kvps.src = src;
+			priority_queue.push(kvps);
+		}
+	}
+
 	while( !priority_queue.empty() ) {
 		SortReduceTypes::KvPairSrc<K,V> kvp = priority_queue.top();
 		priority_queue.pop();
@@ -956,8 +990,18 @@ SortReduceReducer::MergerNode<K,V>::WorkerThreadN() {
 		}
 		last_key = kvp.key;
 */
-		this->EmitKvPair(kvp.key, kvp.val);
-		cnt++;
+		if ( mp_update == NULL ) {
+			this->EmitKvPair(kvp.key, kvp.val);
+		} else {
+			if ( last_kvp.key == kvp.key ) {
+				last_kvp.val = mp_update(last_kvp.val, kvp.val);
+			} else {
+				this->EmitKvPair(last_kvp.key, last_kvp.val);
+				last_kvp.key = kvp.key;
+				last_kvp.val = kvp.val;
+			}
+		}
+		//cnt++;
 
 
 		if ( !readers[src]->IsEmpty() ) {
@@ -969,10 +1013,13 @@ SortReduceReducer::MergerNode<K,V>::WorkerThreadN() {
 			priority_queue.push(kvps);
 		}
 	}
+	if (mp_update != NULL) {
+		this->EmitKvPair(last_kvp.key, last_kvp.val);
+	}
 
 	this->FinishEmit();
 	
-	printf( "MergerNodeN end reached -- %ld!\n", cnt ); fflush(stdout);
+	//printf( "MergerNodeN end reached -- %ld!\n", cnt ); fflush(stdout);
 	
 	for ( int i = 0; i < source_count; i++ ) {
 		delete readers[i];

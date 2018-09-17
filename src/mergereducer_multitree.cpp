@@ -82,7 +82,7 @@ SortReduceReducer::MergeReducer_MultiTree<K,V>::Start() {
 			int node_count = maximum_2to1_nodes;
 
 			for ( int i = 0; i < node_count; i++ ) {
-				MergerNode<K,V>* merger = new MergerNode<K,V>(1024*1024, 4, cur_level);
+				MergerNode<K,V>* merger = new MergerNode<K,V>(1024*1024, 4, this->mp_update, cur_level);
 				for ( int j = 0; j < leaves_per_node; j++ ) {
 					if ( (size_t)i*leaves_per_node+j >= mvv_tree_nodes[cur_level].size() ) break;
 
