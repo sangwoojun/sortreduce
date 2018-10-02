@@ -1,6 +1,5 @@
 CC=g++
 
-
 SRCDIR=./src
 CPPFILES=$(wildcard $(SRCDIR)/*.cpp)
 INCDIR=./include

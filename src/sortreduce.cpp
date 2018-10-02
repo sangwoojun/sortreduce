@@ -349,6 +349,7 @@ SortReduce<K,V>::ManagerThread() {
 			SortReduceReducer::MergeReducer<K,V>* merger;
 			if ( last_merge ) {
 				//merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory, m_config->output_filename);
+				
 				if ( m_config->output_filename == "" ) {
 					SortReduceReducer::MergeReducer_MultiTree<K,V>* mmerger = new SortReduceReducer::MergeReducer_MultiTree<K,V>(m_config->update, m_config->temporary_directory);
 					mp_result_stream_reader = mmerger->GetResultReader();
@@ -356,6 +357,7 @@ SortReduce<K,V>::ManagerThread() {
 				} else {
 					merger = new SortReduceReducer::MergeReducer_MultiTree<K,V>(m_config->update, m_config->temporary_directory, m_config->output_filename);
 				}
+				
 
 			} else {
 				// Invisible temporary file

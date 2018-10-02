@@ -1300,14 +1300,14 @@ SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::WorkerThread() {
 	V last_val = 0;
 	bool first_kvp = true;
 
-	size_t cur_count = 0;
+	//size_t cur_count = 0;
 
 	while (!m_priority_queue.empty() ) {
 		KvPairSrc kvp = m_priority_queue.top();
 		m_priority_queue.pop();
 		int src = kvp.src;
 
-		cur_count ++;
+		//cur_count ++;
 
 		//printf( "Next: %lx %lx from %d\n", (uint64_t)kvp.key, (uint64_t)kvp.val, src );
 
@@ -1320,9 +1320,11 @@ SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::WorkerThread() {
 			if ( last_key == kvp.key ) {
 				last_val = this->mp_update(last_val, kvp.val);
 			} else {
+			/*
 				if ( last_key > kvp.key ) {
 					printf( "StreamMergeReducer_SinglePriority order wrong! %lx %lx @ %lu (%d - %lu -- %lu %lu)\n", (uint64_t)last_key, (uint64_t)kvp.key, cur_count, src, read_offset[src], this->mv_file_offset[src], this->mv_input_sources[src].file->bytes );
 				}
+			*/
 
 				this->EmitKv(last_key, last_val);
 				last_key = kvp.key;
@@ -1342,11 +1344,13 @@ SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::WorkerThread() {
 			m_priority_queue.push(kvp);
 
 			read_offset[src] += kv_bytes;
-					
+
+			/*
 			if ( last_key_src[src] > key ) {
 				printf( "Source key order wrong %lx %lx @ %d -- %lu\n", (uint64_t)last_key_src[src], (uint64_t)key, src ,read_offset[src] );
 			}
 			last_key_src[src] = key;
+			*/
 		} else if ( this->mv_input_sources[src].from_file ) {
 			this->GetNextFileBlock(src);
 

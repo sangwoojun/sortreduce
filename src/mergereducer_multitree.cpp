@@ -79,6 +79,7 @@ SortReduceReducer::MergeReducer_MultiTree<K,V>::Start() {
 
 		if ( cur_level_count > maximum_2to1_nodes*2 ) {
 			int leaves_per_node = cur_level_count/maximum_2to1_nodes;
+			if ( cur_level_count % maximum_2to1_nodes > 0 ) leaves_per_node ++;
 			int node_count = maximum_2to1_nodes;
 
 			for ( int i = 0; i < node_count; i++ ) {
