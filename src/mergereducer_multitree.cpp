@@ -2,9 +2,10 @@
 
 
 template <class K, class V>
-SortReduceReducer::MergeReducer_MultiTree<K,V>::MergeReducer_MultiTree(V (*update)(V,V), std::string temp_directory, std::string filename, bool verbose) {
+SortReduceReducer::MergeReducer_MultiTree<K,V>::MergeReducer_MultiTree(V (*update)(V,V), std::string temp_directory, int maximum_threads, std::string filename, bool verbose) {
 	this->m_done = false;
 	this->m_started = false;
+	this->m_maximum_threads = maximum_threads;
 
 	this->mp_update = update;
 
@@ -71,7 +72,12 @@ SortReduceReducer::MergeReducer_MultiTree<K,V>::Start() {
 	int cur_level = 0;
 	int cur_level_count = input_count;
 
-	int maximum_2to1_nodes = 4;
+	int maximum_2to1_nodes = 2; // Actually maximum number of leaves of 2to1 nodes
+	if ( m_maximum_threads >= 15 ) {
+		maximum_2to1_nodes = 8;
+	} else if ( m_maximum_threads >= 8 ) {
+		maximum_2to1_nodes = 4;
+	}
 
 	while (cur_level_count > 1) {
 		mvv_tree_nodes.push_back(std::vector<BlockSource<K,V>*>());

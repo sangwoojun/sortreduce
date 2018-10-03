@@ -755,25 +755,14 @@ SortReduceReducer::BlockKvReader<K,V>::~BlockKvReader() {
 template <class K, class V>
 inline bool
 SortReduceReducer::BlockKvReader<K,V>::IsEmpty() {
-	if ( m_done == true ) return true;
+	// The ordering REQUIRES valid_bytes of .last blocks are 0
 
 	if ( m_offset < m_cur_block.valid_bytes ) return false;
+	if ( m_done == true ) return true;
+	if ( m_cur_block.last ) return true;
 
-	return true;
-}
-
-template <class K, class V>
-inline SortReduceTypes::KvPair<K,V>
-SortReduceReducer::BlockKvReader<K,V>::GetNext() {
-	SortReduceTypes::KvPair<K,V> ret;
-	size_t avail = m_cur_block.valid_bytes - m_offset;
-	if ( avail > sizeof(K)+sizeof(V) ) {
-		ret = ReducerUtils<K,V>::DecodeKvp(m_cur_block.buffer, m_offset);
-		m_offset += sizeof(K) + sizeof(V);
-	} else if ( avail == sizeof(K)+sizeof(V) ) {
-		ret = ReducerUtils<K,V>::DecodeKvp(m_cur_block.buffer, m_offset);
+	if ( m_offset >= m_cur_block.valid_bytes ) {
 		m_offset = 0;
-		
 		SortReduceTypes::Block block;
 		block.valid = false;
 		while ( block.valid == false ) {
@@ -782,6 +771,19 @@ SortReduceReducer::BlockKvReader<K,V>::GetNext() {
 		mp_src->ReturnBlock(m_cur_block);
 		m_cur_block = block;
 		if ( m_cur_block.last ) m_done = true;
+	}
+
+	return m_done;
+}
+
+template <class K, class V>
+inline SortReduceTypes::KvPair<K,V>
+SortReduceReducer::BlockKvReader<K,V>::GetNext() {
+	SortReduceTypes::KvPair<K,V> ret;
+	size_t avail = m_cur_block.valid_bytes - m_offset;
+	if ( avail >= sizeof(K)+sizeof(V) ) {
+		ret = ReducerUtils<K,V>::DecodeKvp(m_cur_block.buffer, m_offset);
+		m_offset += sizeof(K) + sizeof(V);
 	} else if ( avail > sizeof(K) ) {
 		ret.key = ReducerUtils<K,V>::DecodeKey(m_cur_block.buffer, m_offset);
 		size_t debt = sizeof(K) + sizeof(V) - avail;
@@ -798,7 +800,7 @@ SortReduceReducer::BlockKvReader<K,V>::GetNext() {
 		m_cur_block = block;
 		m_offset = debt;
 
-		if ( m_offset >= block.valid_bytes ) m_done = true;
+		//if ( m_offset >= block.valid_bytes ) m_done = true;
 	} else {
 		size_t debt = sizeof(K) - avail;
 		memcpy(&ret.key, ((uint8_t*)m_cur_block.buffer+m_offset), avail);
@@ -814,7 +816,7 @@ SortReduceReducer::BlockKvReader<K,V>::GetNext() {
 		ret.val = ReducerUtils<K,V>::DecodeVal(block.buffer, debt);
 		m_cur_block = block;
 		m_offset = debt + sizeof(V);
-		if ( m_offset >= block.valid_bytes ) m_done = true;
+		//if ( m_offset >= block.valid_bytes ) m_done = true;
 	}
 
 	return ret;
@@ -865,7 +867,9 @@ SortReduceReducer::MergerNode<K,V>::Start() {
 template <class K, class V>
 void
 SortReduceReducer::MergerNode<K,V>::WorkerThread2() {
-	printf( "MergerNode WorkerThread2 started!\n" ); fflush(stdout);
+	uint32_t rid = rand();
+	printf( "MergerNode WorkerThread2 started! %x\n", rid ); fflush(stdout);
+
 
 	BlockKvReader<K,V>* readers[2];
 	readers[0] = new BlockKvReader<K,V>(ma_sources[0]);
@@ -879,35 +883,46 @@ SortReduceReducer::MergerNode<K,V>::WorkerThread2() {
 		}
 	}
 
+	bool done_src_0 = false;
 	if ( !readers[0]->IsEmpty() && !readers[1]->IsEmpty() ) {
 		while (true) {
 			if ( kvp[0].key < kvp[1].key ) {
 				this->EmitKvPair(kvp[0].key, kvp[0].val);
+
 				if ( !readers[0]->IsEmpty() ) {
 					kvp[0] = readers[0]->GetNext();
-				} else break;
+				} else {
+					done_src_0 = true;
+					break;
+				}
 			} else {
 				this->EmitKvPair(kvp[1].key, kvp[1].val);
 				if ( !readers[1]->IsEmpty() ) {
 					kvp[1] = readers[1]->GetNext();
-				} else break;
+				} else {
+					done_src_0 = false;
+					break;
+				}
 			}
 		}
 	}
 
-	if ( !readers[0]->IsEmpty() ) {
-		while (true) {
-			this->EmitKvPair(kvp[0].key, kvp[0].val);
-			if ( !readers[0]->IsEmpty() ) {
-				kvp[0] = readers[0]->GetNext();
-			} else break;
-		}
-	}
-	if ( !readers[1]->IsEmpty() ) {
+	// Note: At this point, either kvp[0] or kvp[1] is valid
+
+	if ( done_src_0 ) {
+		// fast forward readers[1]
 		while ( true ) {
 			this->EmitKvPair(kvp[1].key, kvp[1].val);
 			if ( !readers[1]->IsEmpty() ) {
 				kvp[1] = readers[1]->GetNext();
+			} else break;
+		}
+	} else {
+		// fast forward readers[0]
+		while (true) {
+			this->EmitKvPair(kvp[0].key, kvp[0].val);
+			if ( !readers[0]->IsEmpty() ) {
+				kvp[0] = readers[0]->GetNext();
 			} else break;
 		}
 	}

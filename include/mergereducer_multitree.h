@@ -17,7 +17,7 @@ namespace SortReduceReducer {
 	template <class K, class V>
 	class MergeReducer_MultiTree : public MergeReducer<K,V> {
 	public:
-		MergeReducer_MultiTree(V (*update)(V,V), std::string temp_directory, std::string filename = "", bool verbose = false);
+		MergeReducer_MultiTree(V (*update)(V,V), std::string temp_directory, int maximum_threads, std::string filename = "", bool verbose = false);
 		~MergeReducer_MultiTree();
 
 		void PutBlock(SortReduceTypes::Block block);
@@ -36,6 +36,8 @@ namespace SortReduceReducer {
 
 		bool m_started;
 		bool m_done;
+
+		int m_maximum_threads;
 
 		StreamFileReader* mp_stream_file_reader;
 		std::vector<BlockSource<K,V>*> mv_file_reader;

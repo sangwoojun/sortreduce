@@ -324,25 +324,30 @@ SortReduce<K,V>::ManagerThread() {
 			}
 		}
 
+		size_t min_files_per_single_merger = 16;
+		size_t max_files_per_single_merger = 64;
 		// if GetOutBlock() returns more than ...say 16, spawn a merge-reducer
 		size_t temp_file_count = m_file_priority_queue.size();
 		if ( (m_done_inmem||m_reduce_phase) && 
 			(
 				(temp_file_count>1&&mv_stream_mergers_from_storage.empty()) || 
-				temp_file_count >= (size_t)(m_maximum_threads*8) // FIXME too much?
+				temp_file_count >= min_files_per_single_merger // FIXME too much?
 			) 
 
 			//((m_done_inmem&&temp_file_count>1) || temp_file_count >= 16) 
 			&& mv_stream_mergers_from_storage.size() < (size_t)m_maximum_threads 
-			&& mv_stream_mergers_from_storage.size() < 32 // FIXME
+			&& mv_stream_mergers_from_storage.size() < 32 // FIXME(because of read buffer count)
 			) {
 			
-			int to_sort = temp_file_count>32?32:temp_file_count;
+			int to_sort = temp_file_count>max_files_per_single_merger?max_files_per_single_merger:temp_file_count;
 
 			bool last_merge = false;
-			if ( m_done_inmem && mv_stream_mergers_from_storage.empty() ) {
+			if ( m_done_inmem && mv_stream_mergers_from_storage.empty() 
+				&& temp_file_count < m_maximum_threads*min_files_per_single_merger
+				&& temp_file_count < 256) { // FIXME (because of read buffer count)
 
 				last_merge = true;
+				to_sort = temp_file_count;
 			}
 
 			//SortReduceReducer::StreamMergeReducer<K,V>* merger;
@@ -351,11 +356,11 @@ SortReduce<K,V>::ManagerThread() {
 				//merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory, m_config->output_filename);
 				
 				if ( m_config->output_filename == "" ) {
-					SortReduceReducer::MergeReducer_MultiTree<K,V>* mmerger = new SortReduceReducer::MergeReducer_MultiTree<K,V>(m_config->update, m_config->temporary_directory);
+					SortReduceReducer::MergeReducer_MultiTree<K,V>* mmerger = new SortReduceReducer::MergeReducer_MultiTree<K,V>(m_config->update, m_config->temporary_directory, m_maximum_threads);
 					mp_result_stream_reader = mmerger->GetResultReader();
 					merger = mmerger;
 				} else {
-					merger = new SortReduceReducer::MergeReducer_MultiTree<K,V>(m_config->update, m_config->temporary_directory, m_config->output_filename);
+					merger = new SortReduceReducer::MergeReducer_MultiTree<K,V>(m_config->update, m_config->temporary_directory, m_maximum_threads, m_config->output_filename);
 				}
 				
 
