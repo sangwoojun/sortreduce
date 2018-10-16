@@ -945,8 +945,6 @@ SortReduceReducer::MergerNode<K,V>::WorkerThreadN() {
 
 	std::priority_queue<SortReduceTypes::KvPairSrc<K,V>,std::vector<SortReduceTypes::KvPairSrc<K,V> >, CompareKv> priority_queue;
 
-	std::vector<SortReduceTypes::Block> cur_blocks;
-	std::vector<size_t> in_off(source_count, 0);
 	//std::vector<K> last_keys;
 	SortReduceTypes::KvPair<K,V> last_kvp = {0};
 	

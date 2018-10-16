@@ -42,7 +42,7 @@ namespace SortReduceReducer {
 		StreamFileReader* mp_stream_file_reader;
 		std::vector<BlockSource<K,V>*> mv_file_reader;
 		std::vector<std::vector<BlockSource<K,V>*>> mvv_tree_nodes;
-		std::vector<BlockSourceNode<K,V>*> mv_tree_nodes_seq; // for easy deleting
+		std::vector<BlockSource<K,V>*> mv_tree_nodes_seq; // for easy deleting
 
 		ReducerNode<K,V>* mp_reducer_node_to_file;
 		ReducerNodeStream<K,V>* mp_reducer_node_stream;

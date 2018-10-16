@@ -1,4 +1,5 @@
 #include "mergereducer_multitree.h"
+#include "mergereducer_accel.h"
 
 
 template <class K, class V>
@@ -89,7 +90,7 @@ SortReduceReducer::MergeReducer_MultiTree<K,V>::Start() {
 			int node_count = maximum_2to1_nodes;
 
 			for ( int i = 0; i < node_count; i++ ) {
-				MergerNode<K,V>* merger = new MergerNode<K,V>(1024*1024, 4, this->mp_update, cur_level);
+				MergerNode<K,V>* merger = new MergerNode<K,V>(1024*1024*4, 4, this->mp_update, cur_level);
 				for ( int j = 0; j < leaves_per_node; j++ ) {
 					if ( (size_t)i*leaves_per_node+j >= mvv_tree_nodes[cur_level].size() ) break;
 
@@ -100,9 +101,21 @@ SortReduceReducer::MergeReducer_MultiTree<K,V>::Start() {
 
 				mv_tree_nodes_seq.push_back(merger);
 			}
+#ifdef HW_ACCEL
+		} else if (MergerNodeAccel<K,V>::MaxSources() >= cur_level_count && !MergerNodeAccel<K,V>::InstanceExist() ) { 
+			MergerNodeAccel<K,V>* merger = new MergerNodeAccel<K,V>();
+			for ( int i = 0; i < cur_level_count; i++ ) {
+				merger->AddSource(mvv_tree_nodes[cur_level][i]);
+			}
+			//FIXME 
+			merger->Start();
+			mvv_tree_nodes[cur_level+1].push_back(merger);
+
+			mv_tree_nodes_seq.push_back(merger);
+#endif
 		} else {
 			for ( int i = 0; i < cur_level_count/2; i++ ) {
-				MergerNode<K,V>* merger = new MergerNode<K,V>(1024*1024, 4, cur_level);
+				MergerNode<K,V>* merger = new MergerNode<K,V>(1024*1024*4, 4, cur_level);
 				merger->AddSource(mvv_tree_nodes[cur_level][i*2]);
 				merger->AddSource(mvv_tree_nodes[cur_level][i*2+1]);
 				merger->Start();
