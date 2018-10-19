@@ -1093,6 +1093,8 @@ SortReduceReducer::ReducerNode<K,V>::WorkerThread() {
 				cnt++;
 				if ( last_kvp.key > kvp.key ) {
 					printf("ReducerNode key order wrong! %lx %lx -- %lx\n", rcnt, (uint64_t)last_kvp.key, (uint64_t)kvp.key ); fflush(stdout);
+				} else {
+					printf("Correct order! %lx %lx -- %lx\n", rcnt, (uint64_t)last_kvp.key, (uint64_t)kvp.key ); fflush(stdout);
 				}
 				last_kvp = kvp;
 

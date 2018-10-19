@@ -83,6 +83,7 @@ int main(int argc, char** argv) {
 	uint64_t nonexist_count = 0;
 	uint64_t mismatch_count = 0;
 	int64_t mismatch_diff  = 0;
+	uint64_t correct_count = 0;
 	std::tuple<uint64_t,uint32_t,bool> kvp = sr->Next();
 	while ( std::get<2>(kvp) ) {
 		uint64_t key = std::get<0>(kvp);
@@ -104,6 +105,8 @@ int main(int argc, char** argv) {
 				mismatch_diff += golden_map[key]-val;
 				printf( "ERROR: mismatch %lx: %x -- %x, diff: %d\n",
 					key, golden_map[key], val, golden_map[key]-val);
+			} else {
+				correct_count ++;
 			}
 			golden_map.erase(golden_map.find(key));
 		}
@@ -114,6 +117,7 @@ int main(int argc, char** argv) {
 
 	printf( "Total: %lu \n", total_count);
 	printf( "Total Sum: %lu \n", total_sum);
+	printf( "Correct: %lu \n", correct_count);
 	printf( "Nonexist: %lu \n", nonexist_count);
 	printf( "Mismatch: %lu \n", mismatch_count);
 	printf( "Mismatch diff: %lu \n", mismatch_diff);

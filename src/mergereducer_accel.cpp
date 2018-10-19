@@ -89,12 +89,14 @@ SortReduceReducer::MergerNodeAccel<K,V>::WorkerThread() {
 		mq_fpga_free_buffer_idx.push(i);
 	}
 
+
 	uint32_t* tbuf = (uint32_t*)malloc(1024*1024);
 	for ( int i = 0; i < 32; i++ ) {
 		*(uint64_t*)(tbuf + (i*3)) = 0x1000200030004000+i;
 		tbuf[(i*3)+2] = 0x9008000+i;
 	}
 	dma->CopyToFPGA(0,tbuf, 1024*1024);
+
 	for ( int i = 0; i < 4; i++ ) {
 		printf( "+ %x ", pcie->userReadWord(258*4) );
 	}
@@ -102,6 +104,7 @@ SortReduceReducer::MergerNodeAccel<K,V>::WorkerThread() {
 
 
 	// Send write buffer for Sort-Reduce root
+	SendWriteBlock();
 	SendWriteBlock();
 	SendWriteBlock();
 
@@ -149,9 +152,12 @@ SortReduceReducer::MergerNodeAccel<K,V>::WorkerThread() {
 		for ( int i = 0; i < 16; i++ ) {
 			printf(" %x, ", pcie->userReadWord((10)*4));
 			printf(" %x, ", pcie->userReadWord((11)*4));
-			printf(" %x ", pcie->userReadWord((12)*4));
 			printf( "\n" );
 		}
+		for ( int i = 0; i < 4; i++ ) {
+			printf( "+ %x ", pcie->userReadWord(258*4) );
+		}
+		printf("\n");
 		for (int i = 0; i < 8; i++ ) {
 			printf(">>%d %x\n", i, pcie->userReadWord((2+i)*4));
 		}
@@ -185,8 +191,9 @@ SortReduceReducer::MergerNodeAccel<K,V>::WorkerThread() {
 			}
 		} else {
 			// Write buffer done
+			int freeidx = 0;
 			if ( !mq_fpga_inflight_idx_dst.empty() ) {
-				int freeidx = mq_fpga_inflight_idx_dst.front();
+				freeidx = mq_fpga_inflight_idx_dst.front();
 				mq_fpga_inflight_idx_dst.pop();
 				mq_fpga_free_buffer_idx.push(freeidx);
 			} else {
@@ -202,7 +209,7 @@ SortReduceReducer::MergerNodeAccel<K,V>::WorkerThread() {
 			uint32_t bufferwritebytes = pcie->userReadWord(17*4);
 			
 			// emit
-			size_t fpga_addr = fpga_buffer_size*blockidx;
+			size_t fpga_addr = fpga_buffer_size*freeidx;
 			dma->CopyFromFPGA(fpga_addr, ma_blocks[blockidx].buffer, fpga_buffer_size);
 			ma_blocks[blockidx].valid = true;
 			ma_blocks[blockidx].managed_idx = blockidx;
@@ -350,7 +357,9 @@ SortReduceReducer::MergerNodeAccel<K,V>::SendReadBlock(BlockSource<K,V>* src, in
 
 	int fpgaidx = mq_fpga_free_buffer_idx.front();
 	mq_fpga_free_buffer_idx.pop();
-
+	
+	//*(uint64_t*)block.buffer = 0x1111222233334444;
+	
 	size_t fpga_buffer_offset = fpga_buffer_size*fpgaidx;
 	dma->CopyToFPGA(fpga_buffer_offset, block.buffer, block.valid_bytes);
 	//printf( "%d -> %lx\n", idx, *(uint64_t*)block.buffer );
@@ -359,11 +368,12 @@ SortReduceReducer::MergerNodeAccel<K,V>::SendReadBlock(BlockSource<K,V>* src, in
 	uint32_t dramWords = block.valid_bytes/64;
 	if ( block.valid_bytes%64 > 0 ) dramWords++;
 
+
 	m_read_block_total_bytes += block.valid_bytes;
 
 	maq_fpga_inflight_idx_src[idx].push(fpgaidx);
 
-	printf( "MergerNodeAccel::SendReadBlock sending %lx bytes to %d\n", block.valid_bytes, idx );
+	printf( "MergerNodeAccel::SendReadBlock sending %lx bytes (%x words) to %d\n", block.valid_bytes, dramWords, idx );
 
 	pcie->userWriteWord(0, 0);
 	pcie->userWriteWord(4*1, (uint32_t)fpga_buffer_offset);
@@ -427,8 +437,9 @@ SortReduceReducer::MergerNodeAccel<K,V>::SendWriteBlock() {
 
 	int fpgaidx = mq_fpga_free_buffer_idx.front();
 	mq_fpga_free_buffer_idx.pop();
-	size_t fpga_buffer_offset = fpga_buffer_size*fpgaidx;
 	mq_fpga_inflight_idx_dst.push(fpgaidx);
+
+	size_t fpga_buffer_offset = fpga_buffer_size*fpgaidx;
 
 	m_cur_write_buffer_idx = mq_free_idx.front();
 	mq_cur_write_buffer_idxs.push(mq_free_idx.front());
