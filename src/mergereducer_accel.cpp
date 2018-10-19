@@ -14,6 +14,8 @@ SortReduceReducer::MergerNodeAccel<K,V>::MergerNodeAccel(V (*update)(V,V)) {
 	m_kill = false;
 	mp_update = update;
 
+	m_read_block_total_bytes = 0;
+
 	// Make into argument?
 	size_t block_bytes = fpga_buffer_size;
 	int block_count = 8;
@@ -76,6 +78,7 @@ template <class K, class V>
 void
 SortReduceReducer::MergerNodeAccel<K,V>::WorkerThread() {
 	int source_count = ma_sources.size();
+	BdbmPcie* pcie = BdbmPcie::getInstance();
 	
 	printf( "MergerNodeAccel WorkerThread started with %d sources!\n", source_count ); fflush(stdout);
 
@@ -86,9 +89,36 @@ SortReduceReducer::MergerNodeAccel<K,V>::WorkerThread() {
 		mq_fpga_free_buffer_idx.push(i);
 	}
 
+	uint32_t* tbuf = (uint32_t*)malloc(1024*1024);
+	for ( int i = 0; i < 32; i++ ) {
+		*(uint64_t*)(tbuf + (i*3)) = 0x1000200030004000+i;
+		tbuf[(i*3)+2] = 0x9008000+i;
+	}
+	dma->CopyToFPGA(0,tbuf, 1024*1024);
+	for ( int i = 0; i < 4; i++ ) {
+		printf( "+ %x ", pcie->userReadWord(258*4) );
+	}
+	printf("\n");
+
 
 	// Send write buffer for Sort-Reduce root
 	SendWriteBlock();
+	SendWriteBlock();
+
+	//
+	while (false) {
+		int done = GetDoneBuffer();
+		if ( done >= HW_MAXIMUM_SOURCES ) {
+			uint32_t bufferwritebytes = pcie->userReadWord(17*4);
+			if ( bufferwritebytes > 0 ) {
+				fprintf(stderr, "MergerNodeAccel bufferwritebytes returned non-zero!\n" );
+			}
+			break;
+		}
+		if ( done < 0 ) continue;
+
+		fprintf(stderr, "MergerNodeAccel - GetDoneBuffer called without input!\n" );
+	}
 
 	int active_sources_cnt = 0;
 	
@@ -98,7 +128,7 @@ SortReduceReducer::MergerNodeAccel<K,V>::WorkerThread() {
 			// send buffer~i to FPGA
 			if (SendReadBlock(ma_sources[i], i) ) {
 				active_sources_cnt++;
-				ma_read_buffers_inflight[i] = 2; // two done signals req. bc/ buffer read start issues a done signal too
+				ma_read_buffers_inflight[i] = 1; 
 			}
 			else SendReadBlockDone(i);
 		} else {
@@ -107,19 +137,38 @@ SortReduceReducer::MergerNodeAccel<K,V>::WorkerThread() {
 		}
 	}
 
-	//TODO RETURN FPGA BUFFER IDXs
+
 
 	bool last_write_block = false;
-	BdbmPcie* pcie = BdbmPcie::getInstance();
+	bool underfilled_block = false;
 
 	// Read blocks return a done signal at start of first buffer read
 	// resulting in two buffers in flight at any time (yay)
 	while (true) {
 		int done = GetDoneBuffer();
+		for ( int i = 0; i < 16; i++ ) {
+			printf(" %x, ", pcie->userReadWord((10)*4));
+			printf(" %x, ", pcie->userReadWord((11)*4));
+			printf(" %x ", pcie->userReadWord((12)*4));
+			printf( "\n" );
+		}
+		for (int i = 0; i < 8; i++ ) {
+			printf(">>%d %x\n", i, pcie->userReadWord((2+i)*4));
+		}
+		uint32_t sortedcnt = pcie->userReadWord(0);
+		printf( "%lx -- %x\n", m_read_block_total_bytes, sortedcnt );
+		//sleep(1);
 		if ( done < 0 ) continue;
 
 		if ( done < HW_MAXIMUM_SOURCES ) {
 			// Read buffer done
+			if ( !maq_fpga_inflight_idx_src[done].empty() ) {
+				int freeidx = maq_fpga_inflight_idx_src[done].front();
+				maq_fpga_inflight_idx_src[done].pop();
+				mq_fpga_free_buffer_idx.push(freeidx);
+			} else {
+				fprintf(stderr, "MergerNodeAccel returned read buffer not used!\n" );
+			}
 			printf( "MergerNodeAccel read buffer done\n" );
 			if ( !SendReadBlock(ma_sources[done], done) ) {
 				// is last!
@@ -136,8 +185,17 @@ SortReduceReducer::MergerNodeAccel<K,V>::WorkerThread() {
 			}
 		} else {
 			// Write buffer done
+			if ( !mq_fpga_inflight_idx_dst.empty() ) {
+				int freeidx = mq_fpga_inflight_idx_dst.front();
+				mq_fpga_inflight_idx_dst.pop();
+				mq_fpga_free_buffer_idx.push(freeidx);
+			} else {
+				fprintf(stderr, "MergerNodeAccel returned write buffer not used!\n" );
+			}
 			printf( "MergerNodeAccel write buffer done\n" );
 			int blockidx = m_cur_write_buffer_idx;
+			blockidx = mq_cur_write_buffer_idxs.front();
+			mq_cur_write_buffer_idxs.pop();
 			if ( !last_write_block ) {
 				SendWriteBlock();
 			}
@@ -154,35 +212,70 @@ SortReduceReducer::MergerNodeAccel<K,V>::WorkerThread() {
 
 			if ( bufferwritebytes != fpga_buffer_size ) {
 				printf( "Write buffer is not 4 MB -- %x\n", bufferwritebytes );
+				underfilled_block = true;
 			}
 
-			if ( last_write_block ) break;
+			if ( last_write_block ) {
+				m_mutex.lock();
+				bool free_exist = !mq_free_idx.empty();
+				m_mutex.unlock();
+
+				while ( !free_exist ) {
+					m_mutex.lock();
+					free_exist = !mq_free_idx.empty();
+					m_mutex.unlock();
+				}
+				m_mutex.lock();
+				int idx = mq_free_idx.front();
+				mq_free_idx.pop();
+				ma_blocks[idx].valid = true;
+				ma_blocks[idx].managed_idx = idx;
+				ma_blocks[idx].last = true;
+				ma_blocks[idx].valid_bytes = 0;
+
+				mq_ready_idx.push(idx);
+				m_mutex.unlock();
+				break;
+			}
 		}
 
 		//if reader all done, break
 		if ( !last_write_block && HardwareDone() ) {
-			m_mutex.lock();
-			bool free_exist = !mq_free_idx.empty();
-			m_mutex.unlock();
-
-			while ( !free_exist ) {
-				m_mutex.lock();
-				free_exist = !mq_free_idx.empty();
-				m_mutex.unlock();
-			}
-			m_mutex.lock();
-			int idx = mq_free_idx.front();
-			mq_free_idx.pop();
-			ma_blocks[idx].valid = true;
-			ma_blocks[idx].managed_idx = idx;
-			ma_blocks[idx].last = true;
-
-			mq_ready_idx.push(idx);
-			m_mutex.unlock();
+			printf( "MergerNodeAccel accelerator done\n" ); fflush(stdout);
+			
 
 			last_write_block = true;
+			if ( underfilled_block == true ) {
+				m_mutex.lock();
+				bool free_exist = !mq_free_idx.empty();
+				m_mutex.unlock();
+
+				while ( !free_exist ) {
+					m_mutex.lock();
+					free_exist = !mq_free_idx.empty();
+					m_mutex.unlock();
+				}
+				m_mutex.lock();
+				int idx = mq_free_idx.front();
+				mq_free_idx.pop();
+				ma_blocks[idx].valid = true;
+				ma_blocks[idx].managed_idx = idx;
+				ma_blocks[idx].last = true;
+				ma_blocks[idx].valid_bytes = 0;
+
+				mq_ready_idx.push(idx);
+				m_mutex.unlock();
+
+				break;
+			}
 		}
 	}
+	for (int i = 0; i < 8; i++ ) {
+		printf(">>%d %x\n", i, pcie->userReadWord((2+i)*4));
+	}
+	uint32_t sortedcnt = pcie->userReadWord(0);
+	printf( "%lx -- %x\n", m_read_block_total_bytes, sortedcnt );
+	printf( "MergerNodeAccel WorkerThread done\n" ); fflush(stdout);
 
 	// wait until all write done
 
@@ -226,34 +319,6 @@ SortReduceReducer::MergerNodeAccel<K,V>::SendDone(int src) {
 }
 
 template <class K, class V>
-int 
-SortReduceReducer::MergerNodeAccel<K,V>::CopyBlockToFPGA(SortReduceTypes::Block block) {
-	if ( mq_fpga_free_buffer_idx.empty() ) return -1;
-	if ( !block.valid ) {
-		fprintf( stderr, "MergerNodeAccel CopyBlockToFPGA with invalid block\n" );
-		return -1;
-	}
-	if ( block.valid_bytes > 1024*1024*4 ) {
-		fprintf( stderr, "MergerNodeAccel CopyBlockToFPGA with block size > 4!\n" );
-		return -1;
-	}
-	int fpga_buf_idx = mq_fpga_free_buffer_idx.front();
-	mq_fpga_free_buffer_idx.pop();
-
-	DRAMHostDMA* dma = DRAMHostDMA::GetInstance();
-
-	size_t fpga_addr = (size_t)fpga_buf_idx * 4 * 1024;
-	dma->CopyToFPGA(fpga_addr, block.buffer, block.valid_bytes);
-
-	return fpga_buf_idx;
-}
-
-template <class K, class V>
-void 
-SortReduceReducer::MergerNodeAccel<K,V>::CopyBlockFromFPGA(SortReduceTypes::Block block, int idx){
-}
-
-template <class K, class V>
 bool
 SortReduceReducer::MergerNodeAccel<K,V>::SendReadBlock(BlockSource<K,V>* src, int idx) {
 
@@ -288,10 +353,21 @@ SortReduceReducer::MergerNodeAccel<K,V>::SendReadBlock(BlockSource<K,V>* src, in
 
 	size_t fpga_buffer_offset = fpga_buffer_size*fpgaidx;
 	dma->CopyToFPGA(fpga_buffer_offset, block.buffer, block.valid_bytes);
+	//printf( "%d -> %lx\n", idx, *(uint64_t*)block.buffer );
+
+	//FIXME DRAM word size hardcoded
+	uint32_t dramWords = block.valid_bytes/64;
+	if ( block.valid_bytes%64 > 0 ) dramWords++;
+
+	m_read_block_total_bytes += block.valid_bytes;
+
+	maq_fpga_inflight_idx_src[idx].push(fpgaidx);
+
+	printf( "MergerNodeAccel::SendReadBlock sending %lx bytes to %d\n", block.valid_bytes, idx );
 
 	pcie->userWriteWord(0, 0);
 	pcie->userWriteWord(4*1, (uint32_t)fpga_buffer_offset);
-	pcie->userWriteWord(4*2, fpga_buffer_size);
+	pcie->userWriteWord(4*2, dramWords);
 	pcie->userWriteWord(4*9, idx);
 
 	m_mutex.unlock();
@@ -352,13 +428,18 @@ SortReduceReducer::MergerNodeAccel<K,V>::SendWriteBlock() {
 	int fpgaidx = mq_fpga_free_buffer_idx.front();
 	mq_fpga_free_buffer_idx.pop();
 	size_t fpga_buffer_offset = fpga_buffer_size*fpgaidx;
+	mq_fpga_inflight_idx_dst.push(fpgaidx);
 
 	m_cur_write_buffer_idx = mq_free_idx.front();
+	mq_cur_write_buffer_idxs.push(mq_free_idx.front());
 	mq_free_idx.pop();
+
+	// FIXME DRAM word with hardcoded
+	uint32_t dramWords = fpga_buffer_size/64;
 
 	pcie->userWriteWord(0, 0);
 	pcie->userWriteWord(4*1, (uint32_t)fpga_buffer_offset);
-	pcie->userWriteWord(4*2, fpga_buffer_size);
+	pcie->userWriteWord(4*2, dramWords);
 	pcie->userWriteWord(4*8, 0);
 
 	m_mutex.unlock();

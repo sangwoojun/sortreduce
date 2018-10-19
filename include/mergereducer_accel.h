@@ -38,8 +38,6 @@ namespace SortReduceReducer {
 	private:
 		// Non-inherited stuff
 		void SendDone(int src);
-		int CopyBlockToFPGA(SortReduceTypes::Block block);
-		void CopyBlockFromFPGA(SortReduceTypes::Block block, int idx);
 
 		bool SendReadBlockDone(int idx);
 		bool SendReadBlock(BlockSource<K,V>* src, int idx);
@@ -47,6 +45,8 @@ namespace SortReduceReducer {
 		int GetDoneBuffer();
 		bool HardwareDone();
 		std::queue<int> mq_fpga_free_buffer_idx;
+		std::queue<int> maq_fpga_inflight_idx_src[HW_MAXIMUM_SOURCES];
+		std::queue<int> mq_fpga_inflight_idx_dst;
 		static const size_t fpga_buffer_size = 1024*1024*4;
 	public:
 		static bool InstanceExist() {return m_instance_exist;};
@@ -65,6 +65,9 @@ namespace SortReduceReducer {
 		int ma_read_buffers_inflight[HW_MAXIMUM_SOURCES];
 
 		int m_cur_write_buffer_idx;
+		std::queue<int> mq_cur_write_buffer_idxs;
+
+		size_t m_read_block_total_bytes;
 
 
 		std::mutex m_mutex;
