@@ -194,6 +194,7 @@ SortReduceReducer::MergerNodeAccel<K,V>::ReturnBlock(SortReduceTypes::Block bloc
 		fprintf( stderr, "ERROR: MergerNodeAccel::ReturnBlock called with invalid block %s:%d\n", __FILE__, __LINE__ );
 		return;
 	}
+	printf( "Ready Block returned %d\n", block.managed_idx );
 	m_mutex.lock();
 	mq_free_idx.push(block.managed_idx);
 	m_mutex.unlock();
@@ -305,13 +306,11 @@ SortReduceReducer::MergerNodeAccel<K,V>::EmitBlock(size_t offset, size_t bytes, 
 
 
 
-	printf( "EmitBlock called at %ld -> %lx (%lx)\n", offset, m_out_offset, m_total_out_bytes );
-	for ( int i = 0; i < 16; i++ ) {
-		printf( " %x ", *((uint32_t*)(dmabuf + offset) + i) );
-	}
-	printf( "\n" );
-
-	return;
+	printf( "EmitBlock called at %lx %lx -> %lx (%lx)\n", bytes, offset, m_out_offset, m_total_out_bytes );
+	uint32_t* dmas = (uint32_t*)(dmabuf + offset);
+	uint32_t* dmae = (uint32_t*)(dmabuf + offset + bytes)-4;
+	printf( "+> %x %x %x %x\n", dmas[0], dmas[1], dmas[2], dmas[3] );
+	printf( "+< %x %x %x %x\n", dmae[0], dmae[1], dmae[2], dmae[3] );
 
 
 	uint8_t* ptr = (dmabuf+offset);
@@ -330,6 +329,8 @@ SortReduceReducer::MergerNodeAccel<K,V>::EmitBlock(size_t offset, size_t bytes, 
 		ma_blocks[m_cur_out_idx].valid_bytes = block.bytes;
 		mq_ready_idx.push(m_cur_out_idx);
 
+		printf( "Ready Block enqueued %d\n", m_cur_out_idx );
+
 		m_out_offset = 0;
 
 		while (mq_free_idx.empty()){
@@ -339,6 +340,8 @@ SortReduceReducer::MergerNodeAccel<K,V>::EmitBlock(size_t offset, size_t bytes, 
 
 		m_cur_out_idx = mq_free_idx.front();
 		mq_free_idx.pop();
+
+		printf( "New free block %d\n", m_cur_out_idx );
 		
 		block = ma_blocks[m_cur_out_idx];
 		memcpy(block.buffer, ptr+avail, bytes-avail);
@@ -355,6 +358,7 @@ SortReduceReducer::MergerNodeAccel<K,V>::EmitBlock(size_t offset, size_t bytes, 
 		ma_blocks[m_cur_out_idx].last = false;
 		ma_blocks[m_cur_out_idx].valid_bytes = m_out_offset;
 		mq_ready_idx.push(m_cur_out_idx);
+		printf( "Ready Block enqueued %d -- flushing\n", m_cur_out_idx );
 		
 		while (mq_free_idx.empty()){
 			m_mutex.unlock();
@@ -367,6 +371,7 @@ SortReduceReducer::MergerNodeAccel<K,V>::EmitBlock(size_t offset, size_t bytes, 
 		ma_blocks[m_cur_out_idx].last = true;
 		mq_ready_idx.push(m_cur_out_idx);
 		m_mutex.unlock();
+		printf( "Ready Block enqueued %d -- last\n", m_cur_out_idx );
 	}
 }
 

@@ -521,7 +521,7 @@ SortReduceReducer::ReducerUtils<K,V>::DecodeKvPair(SortReduceTypes::Block* p_blo
 		off += sizeof(K);
 		memcpy(&kvp.val, ((uint8_t*)buffer+off), avail-sizeof(K));
 
-		src->ReturnBlock(*p_block);
+		//src->ReturnBlock(*p_block);
 
 		SortReduceTypes::Block block;
 		block.valid = false;
@@ -550,7 +550,7 @@ SortReduceReducer::ReducerUtils<K,V>::DecodeKvPair(SortReduceTypes::Block* p_blo
 		int debt = sizeof(K) - avail;
 		memcpy(&kvp.key, ((uint8_t*)buffer+off), avail);
 			
-		src->ReturnBlock(*p_block);
+		//src->ReturnBlock(*p_block);
 
 		SortReduceTypes::Block block;
 		block.valid = false;
@@ -1093,8 +1093,8 @@ SortReduceReducer::ReducerNode<K,V>::WorkerThread() {
 				cnt++;
 				if ( last_kvp.key > kvp.key ) {
 					printf("ReducerNode key order wrong! %lx %lx -- %lx\n", rcnt, (uint64_t)last_kvp.key, (uint64_t)kvp.key ); fflush(stdout);
-				} else {
-					printf("Correct order! %lx %lx -- %lx\n", rcnt, (uint64_t)last_kvp.key, (uint64_t)kvp.key ); fflush(stdout);
+				//} else {
+					//printf("Correct order! %lx %lx -- %lx\n", rcnt, (uint64_t)last_kvp.key, (uint64_t)kvp.key ); fflush(stdout);
 				}
 				last_kvp = kvp;
 

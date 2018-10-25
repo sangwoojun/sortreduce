@@ -6,7 +6,7 @@ INCDIR=./include
 # comment out if not using FPGA
 FPGADIR=../bluespecpcie/cpp
 FPGADRAMDIR=../bluespecpcie/dram/cpp
-FPGAFLAG=-DHW_ACCEL
+FPGAFLAG=
 
 
 CPPFILES=$(wildcard $(SRCDIR)/*.cpp) $(wildcard $(FPGADIR)/*.cpp)
