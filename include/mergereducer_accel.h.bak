@@ -2,7 +2,7 @@
 #define __REDUCER_ACCEL_H__
 #ifdef HW_ACCEL
 
-#define HW_MAXIMUM_SOURCES 32
+#define HW_MAXIMUM_SOURCES 8
 
 #include <mutex>
 #include <vector>
@@ -17,6 +17,7 @@
 #include "utils.h"
 
 #include "bdbmpcie.h"
+#include "DRAMHostDMA.h"
 
 /**
 TODO: only allow ONE instance
@@ -26,7 +27,7 @@ namespace SortReduceReducer {
 	template <class K, class V>
 	class MergerNodeAccel : public BlockSource<K,V> {
 	public:
-		MergerNodeAccel(V (*update)(V,V) = NULL); 
+		MergerNodeAccel(V (*update)(V,V) = NULL); //FIXME should use buffer manager!
 		~MergerNodeAccel();
 		void AddSource(BlockSource<K,V>* src);
 		bool Start();
@@ -35,50 +36,52 @@ namespace SortReduceReducer {
 		void ReturnBlock(SortReduceTypes::Block block);
 
 	private:
+		// Non-inherited stuff
+		void SendDone(int src);
+
+		bool SendReadBlockDone(int idx);
 		bool SendReadBlock(BlockSource<K,V>* src, int idx);
-		void SendReadBlockDone(int idx);
-		void SendWriteBlock();
-		void EmitBlock(size_t offset, size_t bytes, bool last);
+		bool SendWriteBlock();
+		int GetDoneBuffer();
+		bool HardwareDone();
+		std::queue<int> mq_fpga_free_buffer_idx;
+		std::queue<int> maq_fpga_inflight_idx_src[HW_MAXIMUM_SOURCES];
+		std::queue<int> mq_fpga_inflight_idx_dst;
+		static const size_t fpga_buffer_size = 1024*1024*4;
 	public:
 		static bool InstanceExist() {return m_instance_exist;};
 		static int MaxSources() { return m_max_sources; };
 	private:
 		static bool m_instance_exist;
-		static const int m_max_sources = 32;
+		static const int m_max_sources = 8;
 	private:
 		std::thread m_worker_thread;
 		void WorkerThread();
 		bool m_started;
 		bool m_kill;
 
+		bool ma_done[HW_MAXIMUM_SOURCES];
+		bool ma_flushed[HW_MAXIMUM_SOURCES];
+		int ma_read_buffers_inflight[HW_MAXIMUM_SOURCES];
+
+		int m_cur_write_buffer_idx;
+		std::queue<int> mq_cur_write_buffer_idxs;
+
+		size_t m_read_block_total_bytes;
+
+
 		std::mutex m_mutex;
 
-
-
-		int m_source_count;
-		BlockSource<K,V>* ma_sources[HW_MAXIMUM_SOURCES];
-		size_t ma_sources_offset[HW_MAXIMUM_SOURCES];
-		SortReduceTypes::Block ma_cur_read_blocks[HW_MAXIMUM_SOURCES];
-		std::queue<int> maq_read_buffers_inflight[HW_MAXIMUM_SOURCES];
-		
-		bool ma_last_sent[HW_MAXIMUM_SOURCES];
+		std::vector<BlockSource<K,V>*> ma_sources;
 
 		V (*mp_update)(V,V) = NULL;
-
-		std::queue<int> mq_free_dma_idx; // for host->fpga
-		static const int m_write_buffer_idx_start = 128;
-		static const int m_write_buffer_idx_end = 256;
-		int m_cur_write_buffer_idx;
-		int m_write_buffers_inflight = 0;
 		
 		// Output stuff
+		int m_block_count;
 		std::queue<int> mq_ready_idx;
 		std::queue<int> mq_free_idx;
 		std::vector<SortReduceTypes::Block> ma_blocks;
-		int m_cur_out_idx;
 		size_t m_out_offset;
-		size_t m_total_out_bytes;
-		SortReduceTypes::Block m_cur_out_block;
 	};
 }
 

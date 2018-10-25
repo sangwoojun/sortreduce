@@ -79,6 +79,11 @@ SortReduceReducer::MergeReducer_MultiTree<K,V>::Start() {
 	} else if ( m_maximum_threads >= 8 ) {
 		maximum_2to1_nodes = 4;
 	}
+#ifdef HW_ACCEL
+	if ( !MergerNodeAccel<K,V>::InstanceExist() ) {
+		maximum_2to1_nodes = 32;
+	}
+#endif
 
 	while (cur_level_count > 1) {
 		mvv_tree_nodes.push_back(std::vector<BlockSource<K,V>*>());
