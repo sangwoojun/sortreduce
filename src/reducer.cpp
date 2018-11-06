@@ -1,6 +1,66 @@
 #include "reducer.h"
 #include "utils.h"
 #include "types.h"
+/*************
+ TODO: 
+ rewrite StreamFileWriterNode using FileWriterNode
+ block-level emit methods in BlockSource, rewrite BlockSourceNode
+***************/
+
+template <class K, class V>
+SortReduceReducer::FileWriterNode<K,V>::FileWriterNode() {
+	this->m_out_offset = 0;
+	this->m_out_file_offset = 0;
+	this->mp_buffer_manager = AlignedBufferManager::GetInstance(1);
+	
+	// wait until data actually available
+	m_out_block.valid = false;
+}
+template <class K, class V>
+void
+SortReduceReducer::FileWriterNode<K,V>::CreateFile(std::string temp_directory, std::string filename) {
+	this->mp_temp_file_manager = new TempFileManager(temp_directory);
+	this->m_out_file = this->mp_temp_file_manager->CreateEmptyFile(filename);
+}
+
+template <class K, class V>
+void
+SortReduceReducer::FileWriterNode<K,V>::EmitBlock(void* buffer, size_t bytes) {
+	while (!m_out_block.valid) {
+		mp_temp_file_manager->CheckDone();
+		m_out_block = mp_buffer_manager->GetBuffer();
+	}
+
+	if ( m_out_offset + bytes <= m_out_block.bytes ) {
+		memcpy(((uint8_t*)m_out_block.buffer)+m_out_offset, buffer, bytes);
+		m_out_offset += bytes;
+	} else {
+		size_t available = m_out_block.bytes - m_out_offset;
+		size_t debt = bytes - available;
+		memcpy(((uint8_t*)m_out_block.buffer)+m_out_offset, buffer, available);
+		m_out_block.valid_bytes = m_out_block.bytes;
+		while ( !this->mp_temp_file_manager->Write(this->m_out_file, m_out_block, m_out_file_offset) ) usleep(50);
+		m_out_file_offset += m_out_block.valid_bytes;
+			
+		m_out_block = mp_buffer_manager->GetBuffer();
+		while (!m_out_block.valid) {
+			this->mp_temp_file_manager->CheckDone();
+			m_out_block = mp_buffer_manager->GetBuffer();
+		}
+
+		memcpy(m_out_block.buffer, ((uint8_t*)buffer)+available, debt);
+		m_out_offset = debt;
+	}
+}
+template <class K, class V>
+void
+SortReduceReducer::FileWriterNode<K,V>::EmitFlush() {
+	m_out_block.valid_bytes = m_out_offset;
+	while ( !this->mp_temp_file_manager->Write(this->m_out_file, m_out_block, m_out_file_offset) ) usleep(50);
+	m_out_file_offset += m_out_block.valid_bytes;
+
+	while (this->mp_temp_file_manager->CountInFlight() > 0 ) this->mp_temp_file_manager->CheckDone();
+}
 
 template <class K, class V>
 SortReduceReducer::StreamFileWriterNode<K,V>::StreamFileWriterNode(std::string temp_directory, std::string filename) {
@@ -205,6 +265,17 @@ SortReduceReducer::StreamFileReader::ReturnBuffer(SortReduceTypes::Block block) 
 	}
 }
 
+
+
+
+
+
+
+/***********************************************
+** FileReaderNode start
+*********************************************/
+
+
 template <class K, class V>
 SortReduceReducer::FileReaderNode<K,V>::FileReaderNode(StreamFileReader* src, int idx) {
 	mp_reader = src;
@@ -223,6 +294,53 @@ void
 SortReduceReducer::FileReaderNode<K,V>::ReturnBlock(SortReduceTypes::Block block) {
 	mp_reader->ReturnBuffer(block);
 }
+
+/******************************************
+** FileReaderNode end
+******************************************************/
+
+/***********************************************
+** BlockReaderNode start
+*********************************************/
+
+
+template <class K, class V>
+SortReduceReducer::BlockReaderNode<K,V>::BlockReaderNode(SortReduceTypes::Block block) {
+	m_done = false;
+	m_block = block;
+	m_block.last = false;
+}
+
+template <class K, class V>
+SortReduceTypes::Block
+SortReduceReducer::BlockReaderNode<K,V>::GetBlock() {
+	if ( !m_done ) {
+		m_done = true;
+		//printf( "-- %s %s %lx\n", m_block.valid?"valid":"not valid", m_block.last?"last":"not last", m_block.valid_bytes);
+		return m_block;
+	}
+
+	SortReduceTypes::Block ret;
+	ret.valid = true;
+	ret.last = true;
+	ret.valid_bytes = 0;
+	return ret;
+}
+
+template <class K, class V>
+void
+SortReduceReducer::BlockReaderNode<K,V>::ReturnBlock(SortReduceTypes::Block block) {
+	AlignedBufferManager* buffer_manager = AlignedBufferManager::GetInstance(0);
+	//printf( "!!!!!!\n" ); fflush(stdout);
+	if ( block.last == false ) {
+		buffer_manager->ReturnBuffer(block);
+	}
+}
+
+/******************************************
+** BlockReaderNode end
+******************************************************/
+
 
 template <class K, class V>
 SortReduceReducer::MergeReducer<K,V>::~MergeReducer() {
@@ -1198,6 +1316,15 @@ SortReduceReducer::ReducerNodeStream<K,V>::WorkerThread() {
 
 
 template <class K, class V>
+SortReduceReducer::BlockSourceReader<K,V>::BlockSourceReader() {
+	mp_src = NULL;
+	m_done = false;
+	m_kill = false;
+
+	m_offset = 0;
+	m_block.valid = false;
+}
+template <class K, class V>
 SortReduceReducer::BlockSourceReader<K,V>::BlockSourceReader(BlockSource<K,V>* src) {
 	mp_src = src;
 	m_done = false;
@@ -1205,12 +1332,31 @@ SortReduceReducer::BlockSourceReader<K,V>::BlockSourceReader(BlockSource<K,V>* s
 
 	m_offset = 0;
 	m_block = src->GetBlock();
+	while (m_block.valid == false) {
+		m_block = src->GetBlock();
+	}
+}
+
+template <class K, class V>
+void
+SortReduceReducer::BlockSourceReader<K,V>::AddSource(BlockSource<K,V>* src) {
+	mp_src = src;
+	
+	m_block = src->GetBlock();
+	while (m_block.valid == false) {
+		m_block = src->GetBlock();
+	}
 }
 
 template <class K, class V>
 inline SortReduceTypes::KvPair<K,V>
 SortReduceReducer::BlockSourceReader<K,V>::GetNext() {
 	SortReduceTypes::KvPair<K,V> kvp = {0};
+	
+	while (m_block.valid == false) {
+		m_block = mp_src->GetBlock();
+	}
+
 	if ( !m_block.last ) {
 		kvp = ReducerUtils<K,V>::DecodeKvPair(&m_block, &m_offset, mp_src, &m_kill);
 	}
@@ -1459,6 +1605,7 @@ SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::WorkerThread() {
 
 TEMPLATE_EXPLICIT_INSTANTIATION(SortReduceReducer::ReducerUtils)
 TEMPLATE_EXPLICIT_INSTANTIATION(SortReduceReducer::StreamFileWriterNode)
+TEMPLATE_EXPLICIT_INSTANTIATION(SortReduceReducer::FileWriterNode)
 TEMPLATE_EXPLICIT_INSTANTIATION(SortReduceReducer::BlockSource)
 TEMPLATE_EXPLICIT_INSTANTIATION(SortReduceReducer::BlockSourceNode)
 TEMPLATE_EXPLICIT_INSTANTIATION(SortReduceReducer::ReducerNode)
@@ -1466,6 +1613,7 @@ TEMPLATE_EXPLICIT_INSTANTIATION(SortReduceReducer::ReducerNodeStream)
 TEMPLATE_EXPLICIT_INSTANTIATION(SortReduceReducer::MergeReducer)
 TEMPLATE_EXPLICIT_INSTANTIATION(SortReduceReducer::MergerNode)
 TEMPLATE_EXPLICIT_INSTANTIATION(SortReduceReducer::FileReaderNode)
+TEMPLATE_EXPLICIT_INSTANTIATION(SortReduceReducer::BlockReaderNode)
 TEMPLATE_EXPLICIT_INSTANTIATION(SortReduceReducer::BlockSourceReader)
 TEMPLATE_EXPLICIT_INSTANTIATION(SortReduceReducer::StreamMergeReducer)
 TEMPLATE_EXPLICIT_INSTANTIATION(SortReduceReducer::StreamMergeReducer_SinglePriority)

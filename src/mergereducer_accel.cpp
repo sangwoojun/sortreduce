@@ -1,4 +1,3 @@
-#ifdef HW_ACCEL
 
 #include "mergereducer_accel.h"
 
@@ -8,7 +7,19 @@ SortReduceReducer::MergerNodeAccel<K,V>::m_instance_exist = false;
 
 
 template <class K, class V>
-SortReduceReducer::MergerNodeAccel<K,V>::MergerNodeAccel(V (*update)(V,V)) {
+SortReduceReducer::MergerNodeAccel<K,V>::MergerNodeAccel(V (*update)(V,V), std::string temp_directory, std::string filename)
+	: FileWriterNode<K,V>() {
+
+	m_done = false;
+
+	this->m_instance_exist = true;
+	if ( temp_directory != "" ) {
+		this->CreateFile(temp_directory, filename);
+		m_write_file = true;
+	} else {
+		m_write_file = false;
+	}
+
 	m_started = false;
 	m_kill = false;
 	mp_update = update;
@@ -18,27 +29,30 @@ SortReduceReducer::MergerNodeAccel<K,V>::MergerNodeAccel(V (*update)(V,V)) {
 	m_total_out_bytes = 0;
 
 	m_source_count = 0;
-	// Make into argument?
-	int block_bytes = 1024*1024;
-	int block_count = 8;
 
-	for ( int i = 0; i < block_count; i++ ) {
-		SortReduceTypes::Block block;
-		block.valid = true;
-		block.last = false;
-		block.managed = true;
-		block.managed_idx = i;
-		block.buffer = malloc(block_bytes);
-		//block.valid_bytes = block_bytes;
-		block.bytes = block_bytes;
-		this->ma_blocks.push_back(block);
+	if ( m_write_file ) {
+	} else {
+		// Make into argument?
+		int block_bytes = 1024*1024;
+		int block_count = 8;
 
-		this->mq_free_idx.push(i);
+		for ( int i = 0; i < block_count; i++ ) {
+			SortReduceTypes::Block block;
+			block.valid = true;
+			block.last = false;
+			block.managed = true;
+			block.managed_idx = i;
+			block.buffer = malloc(block_bytes);
+			//block.valid_bytes = block_bytes;
+			block.bytes = block_bytes;
+			this->ma_blocks.push_back(block);
+
+			this->mq_free_idx.push(i);
+		}
+		m_out_offset = 0;
+		m_cur_out_idx = mq_free_idx.front();
+		mq_free_idx.pop();
 	}
-	m_out_offset = 0;
-
-	m_cur_out_idx = mq_free_idx.front();
-	mq_free_idx.pop();
 
 	for ( int i = 0; i < HW_MAXIMUM_SOURCES; i++ ) {
 		ma_sources_offset[i] = 0;
@@ -68,105 +82,17 @@ SortReduceReducer::MergerNodeAccel<K,V>::AddSource(BlockSource<K,V>* src) {
 }
 
 template <class K, class V>
-bool
+void
 SortReduceReducer::MergerNodeAccel<K,V>::Start() {
-	if ( this->m_instance_exist == true ) return false;
+	//if ( this->m_instance_exist == true ) return false;
 
-	this->m_instance_exist = true;
-
+#ifdef HW_ACCEL
 	if ( m_source_count <= HW_MAXIMUM_SOURCES ) {
 		m_worker_thread = std::thread(&MergerNodeAccel<K,V>::WorkerThread,this);
 	} else {
 		fprintf(stderr, "MergerNodeAccel called with more then available sources %d\n", m_source_count );
 	}
-
-	return true;
-}
-
-template <class K, class V>
-void
-SortReduceReducer::MergerNodeAccel<K,V>::WorkerThread() {
-	int source_count = m_source_count;
-	BdbmPcie* pcie = BdbmPcie::getInstance();
-	
-	printf( "MergerNodeAccel WorkerThread started with %d sources!\n", source_count ); fflush(stdout);
-
-	SendWriteBlock();
-	SendWriteBlock();
-	SendWriteBlock();
-	SendWriteBlock();
-
-	
-	for ( int i = 0; i < HW_MAXIMUM_SOURCES; i++ ) {
-		if ( i < m_source_count ) {
-			for ( int j = 0; j < 2; j++ ) {
-				if ( !SendReadBlock(ma_sources[i], i) ) {
-					SendReadBlockDone(i);
-					break;
-				}
-			}
-		} else {
-			SendReadBlockDone(i);
-		}
-	}
-
-	bool last = false;
-	while (true) {
-
-
-
-		uint32_t res0 = pcie->userReadWord(32*4);
-		uint32_t res1 = pcie->userReadWord(33*4);
-		uint32_t res2 = pcie->userReadWord(34*4);
-		while ( res0 != 0xffffffff || res1 != 0xffffffff || res2 != 0xffffffff ) {
-			
-			printf( "Sort result %x - %x : %d\n", res0, res1, res2 );
-
-			res0 = pcie->userReadWord(32*4);
-			res1 = pcie->userReadWord(33*4);
-			res2 = pcie->userReadWord(34*4);
-		}
-
-
-
-
-
-
-
-		uint32_t read_done = pcie->userReadWord(0);
-		while (read_done != 0xffffffff) {
-			
-			if ( maq_read_buffers_inflight[read_done].empty() ) {
-				fprintf(stderr, "MergerNodeAccel returned read buffer that was not issued\n" );
-			}
-			int returned_dma_idx = maq_read_buffers_inflight[read_done].front();
-			maq_read_buffers_inflight[read_done].pop();
-			mq_free_dma_idx.push(returned_dma_idx);
-
-			printf( "Read done from source %d\n", read_done );
-			if ( !SendReadBlock(ma_sources[read_done], read_done) ) {
-				SendReadBlockDone(read_done);
-			}
-			read_done = pcie->userReadWord(0);
-		}
-		uint32_t write_done = pcie->userReadWord(1*4);
-		while (write_done != 0xffffffff) {
-			uint32_t idx = ((write_done>>16)&0x3fff);
-			last = ((write_done>>31) > 0 ? true : false);
-			uint32_t bytes = (write_done & 0xffff);
-
-			EmitBlock(idx*1024*4, bytes, last);
-
-			if ( last ) break;
-
-			SendWriteBlock();
-			write_done = pcie->userReadWord(1*4);
-		}
-		if ( last ) break;
-	}
-
-	printf( "Done!!\n" );
-
+#endif
 }
 
 template <class K, class V>
@@ -199,6 +125,109 @@ SortReduceReducer::MergerNodeAccel<K,V>::ReturnBlock(SortReduceTypes::Block bloc
 	mq_free_idx.push(block.managed_idx);
 	m_mutex.unlock();
 }
+
+#ifdef HW_ACCEL
+template <class K, class V>
+void
+SortReduceReducer::MergerNodeAccel<K,V>::WorkerThread() {
+	int source_count = m_source_count;
+	BdbmPcie* pcie = BdbmPcie::getInstance();
+	uint8_t* dmabuf = (uint8_t*)pcie->dmaBuffer();
+	
+	printf( "MergerNodeAccel WorkerThread started with %d sources!\n", source_count ); fflush(stdout);
+
+	uint32_t write_buffers_inflight = pcie->userReadWord(3*4);
+	if ( write_buffers_inflight < 4 ) {
+		for ( uint32_t i = write_buffers_inflight; i < 4; i++ ) {
+			SendWriteBlock();
+		}
+	}
+
+	
+	for ( int i = 0; i < HW_MAXIMUM_SOURCES; i++ ) {
+		if ( i < m_source_count ) {
+			for ( int j = 0; j < 2; j++ ) {
+				if ( !SendReadBlock(ma_sources[i], i) ) {
+					SendReadBlockDone(i);
+					break;
+				}
+			}
+		} else {
+			SendReadBlockDone(i);
+		}
+	}
+
+	bool last = false;
+	while (true) {
+
+
+
+/*
+		uint32_t res0 = pcie->userReadWord(32*4);
+		uint32_t res1 = pcie->userReadWord(33*4);
+		uint32_t res2 = pcie->userReadWord(34*4);
+		while ( res0 != 0xffffffff || res1 != 0xffffffff || res2 != 0xffffffff ) {
+			
+			printf( "Sort result %x - %x : %d\n", res0, res1, res2 );
+
+			res0 = pcie->userReadWord(32*4);
+			res1 = pcie->userReadWord(33*4);
+			res2 = pcie->userReadWord(34*4);
+		}
+		*/
+
+
+
+
+
+
+
+		uint32_t read_done = pcie->userReadWord(0);
+		while (read_done != 0xffffffff) {
+			
+			if ( maq_read_buffers_inflight[read_done].empty() ) {
+				fprintf(stderr, "MergerNodeAccel returned read buffer that was not issued\n" );
+			}
+			int returned_dma_idx = maq_read_buffers_inflight[read_done].front();
+			maq_read_buffers_inflight[read_done].pop();
+			mq_free_dma_idx.push(returned_dma_idx);
+
+			printf( "Read done from source %d\n", read_done );
+			if ( !SendReadBlock(ma_sources[read_done], read_done) ) {
+				SendReadBlockDone(read_done);
+			}
+			read_done = pcie->userReadWord(0);
+		}
+		uint32_t write_done = pcie->userReadWord(1*4);
+		while (write_done != 0xffffffff) {
+			uint32_t idx = ((write_done>>16)&0x3fff);
+			last = ((write_done>>31) > 0 ? true : false);
+			uint32_t bytes = (write_done & 0xffff);
+
+			if ( m_write_file ) {
+				uint8_t* ptr = (dmabuf+offset);
+				EmitBlock(ptr, bytes);
+				if ( last ) {
+					EmitFlush();
+				}
+			} else {
+				EmitDmaBlock(idx*1024*4, bytes, last);
+			}
+
+			if ( last ) break;
+
+			SendWriteBlock();
+			write_done = pcie->userReadWord(1*4);
+		}
+		if ( last ) break;
+		if ( m_kill ) break;
+	}
+	m_done = true;
+
+	printf( "Done!!\n" );
+
+}
+
 
 template <class K, class V>
 bool
@@ -300,13 +329,13 @@ SortReduceReducer::MergerNodeAccel<K,V>::SendWriteBlock() {
 
 template <class K, class V>
 void
-SortReduceReducer::MergerNodeAccel<K,V>::EmitBlock(size_t offset, size_t bytes, bool last) {
+SortReduceReducer::MergerNodeAccel<K,V>::EmitDmaBlock(size_t offset, size_t bytes, bool last) {
 	BdbmPcie* pcie = BdbmPcie::getInstance();
 	uint8_t* dmabuf = (uint8_t*)pcie->dmaBuffer();
 
 
 
-	printf( "EmitBlock called at %lx %lx -> %lx (%lx)\n", bytes, offset, m_out_offset, m_total_out_bytes );
+	printf( "EmitDmaBlock called at %lx %lx -> %lx (%lx)\n", bytes, offset, m_out_offset, m_total_out_bytes );
 	uint32_t* dmas = (uint32_t*)(dmabuf + offset);
 	uint32_t* dmae = (uint32_t*)(dmabuf + offset + bytes)-4;
 	printf( "+> %x %x %x %x\n", dmas[0], dmas[1], dmas[2], dmas[3] );
@@ -374,6 +403,6 @@ SortReduceReducer::MergerNodeAccel<K,V>::EmitBlock(size_t offset, size_t bytes, 
 		printf( "Ready Block enqueued %d -- last\n", m_cur_out_idx );
 	}
 }
+#endif // HW_ACCEL
 
 TEMPLATE_EXPLICIT_INSTANTIATION(SortReduceReducer::MergerNodeAccel)
-#endif // HW_ACCEL

@@ -1,8 +1,8 @@
 #ifndef __REDUCER_ACCEL_H__
 #define __REDUCER_ACCEL_H__
-#ifdef HW_ACCEL
 
 #define HW_MAXIMUM_SOURCES 32
+
 
 #include <mutex>
 #include <vector>
@@ -16,7 +16,9 @@
 #include "types.h"
 #include "utils.h"
 
+#ifdef HW_ACCEL
 #include "bdbmpcie.h"
+#endif // HW_ACCEL
 
 /**
 TODO: only allow ONE instance
@@ -24,21 +26,26 @@ TODO: only allow ONE instance
 
 namespace SortReduceReducer {
 	template <class K, class V>
-	class MergerNodeAccel : public BlockSource<K,V> {
+	class MergerNodeAccel : public BlockSource<K,V>, public FileWriterNode<K,V> {
 	public:
-		MergerNodeAccel(V (*update)(V,V) = NULL); 
+		MergerNodeAccel(V (*update)(V,V) = NULL, std::string temp_directory = "", std::string filename = ""); 
 		~MergerNodeAccel();
 		void AddSource(BlockSource<K,V>* src);
-		bool Start();
+		void Start();
 		
 		SortReduceTypes::Block GetBlock();
 		void ReturnBlock(SortReduceTypes::Block block);
 
+		bool IsDone() { return m_done; };
+
+#ifdef HW_ACCEL
 	private:
+		void WorkerThread();
 		bool SendReadBlock(BlockSource<K,V>* src, int idx);
 		void SendReadBlockDone(int idx);
 		void SendWriteBlock();
-		void EmitBlock(size_t offset, size_t bytes, bool last);
+		void EmitDmaBlock(size_t offset, size_t bytes, bool last);
+#endif
 	public:
 		static bool InstanceExist() {return m_instance_exist;};
 		static int MaxSources() { return m_max_sources; };
@@ -47,11 +54,13 @@ namespace SortReduceReducer {
 		static const int m_max_sources = 32;
 	private:
 		std::thread m_worker_thread;
-		void WorkerThread();
 		bool m_started;
 		bool m_kill;
+		bool m_done;
 
 		std::mutex m_mutex;
+
+		bool m_write_file;
 
 
 
@@ -82,5 +91,4 @@ namespace SortReduceReducer {
 	};
 }
 
-#endif // HW_ACCEL
 #endif // ifndef __REDUCER_ACCEL__

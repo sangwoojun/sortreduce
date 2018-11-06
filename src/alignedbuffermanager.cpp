@@ -78,7 +78,7 @@ AlignedBufferManager::ReturnBuffer(SortReduceTypes::Block block) {
 	m_mutex.lock();
 	//TODO check duplicates!
 	mq_free_buffers.push(block.managed_idx);
-	//printf( "Buffer returned %d -> %d\n", m_instance_idx, mq_free_buffers.size() );
+	//if ( m_instance_idx == 0 ) printf( "Buffer returned %d -> %d\n", m_instance_idx, mq_free_buffers.size() );
 	m_mutex.unlock();
 }
 

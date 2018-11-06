@@ -82,11 +82,11 @@ int main(int argc, char** argv) {
 
 
 
-	SortReduceTypes::Config<uint64_t,uint32_t>* conf = new SortReduceTypes::Config<uint64_t,uint32_t>(tmp_dir, "output.dat", 10);
+	SortReduceTypes::Config<uint64_t,uint32_t>* conf = new SortReduceTypes::Config<uint64_t,uint32_t>(tmp_dir, "output.dat", 8);
 	conf->SetUpdateFunction(&update_function);
-	conf->SetMaxBytesInFlight(1024*1024*1024); //1GB
+	//conf->SetMaxBytesInFlight(1024*1024*1024); //1GB
 	//conf->SetManagedBufferSize(1024*1024*32, 64); // 2 GB
-	conf->SetManagedBufferSize(1024*1024*32, 64); // 4 GB
+	conf->SetManagedBufferSize(1024*1024*8, 64*4); // 4 GB
 	//conf->SetMaxStorageBytes(1024l*1024*1024*32);
 
 	SortReduce<uint64_t,uint32_t>* sr = new SortReduce<uint64_t,uint32_t>(conf);

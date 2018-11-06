@@ -7,6 +7,7 @@
 #include <chrono>
 
 #include "reducer.h"
+#include "mergereducer_accel.h"
 
 #include "alignedbuffermanager.h"
 #include "tempfilemanager.h"
@@ -22,12 +23,13 @@ namespace SortReduceReducer {
 
 		void PutBlock(SortReduceTypes::Block block);
 		void PutFile(SortReduceTypes::File* file);
-		void Start();
+		void Start(); // returns the number of threads
 		bool IsDone();
 
 		SortReduceTypes::File* GetOutFile();
 
 		size_t GetInputFileBytes() { return this->m_input_file_bytes; };
+		int GetThreadCount() { return m_thread_count; };
 
 
 		//for ReducerNodeStream
@@ -37,15 +39,24 @@ namespace SortReduceReducer {
 		bool m_started;
 		bool m_done;
 
+		V (*mp_update)(V,V);
+
 		int m_maximum_threads;
+		int m_thread_count;
+
+
 
 		StreamFileReader* mp_stream_file_reader;
-		std::vector<BlockSource<K,V>*> mv_file_reader;
+		int m_file_input_cnt;
+		std::vector<BlockSource<K,V>*> mv_src_reader;
 		std::vector<std::vector<BlockSource<K,V>*>> mvv_tree_nodes;
 		std::vector<BlockSource<K,V>*> mv_tree_nodes_seq; // for easy deleting
 
+		std::string m_temp_directory;
+		std::string m_filename;
 		ReducerNode<K,V>* mp_reducer_node_to_file;
 		ReducerNodeStream<K,V>* mp_reducer_node_stream;
+		MergerNodeAccel<K,V>* mp_merger_accel;
 
 		BlockSourceReader<K,V>* mp_block_source_reader;
 

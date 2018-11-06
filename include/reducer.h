@@ -46,6 +46,28 @@ namespace SortReduceReducer {
 		std::mutex m_mutex;
 
 	};
+
+	// parent class for those writing blocks to disk
+	template <class K, class V>
+	class FileWriterNode {
+	public:
+		FileWriterNode();
+		SortReduceTypes::File* GetOutFile() { return m_out_file; };
+	protected:
+		void CreateFile(std::string temp_directory, std::string filename);
+		void EmitBlock(void* buffer, size_t bytes);
+		void EmitFlush();
+	protected:
+		SortReduceTypes::File* m_out_file;
+		
+		SortReduceTypes::Block m_out_block;
+		size_t m_out_offset;
+		size_t m_out_file_offset;
+
+		//std::string ms_temp_directory;
+		AlignedBufferManager* mp_buffer_manager;
+		TempFileManager* mp_temp_file_manager;
+	};
 	
 	template <class K, class V>
 	class StreamFileWriterNode {
@@ -130,6 +152,17 @@ namespace SortReduceReducer {
 	};
 	
 	template <class K, class V>
+	class BlockReaderNode : public BlockSource<K,V> {
+	public:
+		BlockReaderNode(SortReduceTypes::Block block);
+		SortReduceTypes::Block GetBlock();
+		void ReturnBlock(SortReduceTypes::Block block);
+	private:
+		bool m_done;
+		SortReduceTypes::Block m_block;
+	};
+	
+	template <class K, class V>
 	class MergerNode : public BlockSourceNode<K,V> {
 	public:
 		MergerNode(size_t block_bytes, int block_count, int my_id = -1); //FIXME should use buffer manager!
@@ -196,7 +229,9 @@ namespace SortReduceReducer {
 	template <class K, class V>
 	class BlockSourceReader {
 	public:
+		BlockSourceReader();
 		BlockSourceReader(BlockSource<K,V>* src);
+		void AddSource(BlockSource<K,V>* src);
 		SortReduceTypes::KvPair<K,V> GetNext();
 		bool Empty();
 	private:
@@ -229,6 +264,7 @@ namespace SortReduceReducer {
 		virtual void Start() = 0;
 		virtual bool IsDone() = 0;
 		virtual SortReduceTypes::File* GetOutFile() = 0;
+		virtual int GetThreadCount() { return 1; };
 
 		virtual size_t GetInputFileBytes() = 0;
 	protected:
