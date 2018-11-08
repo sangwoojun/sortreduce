@@ -327,7 +327,7 @@ SortReduce<K,V>::ManagerThread() {
 		}
 
 		size_t min_files_per_single_merger = 16;
-		size_t max_files_per_single_merger = 64;
+		size_t max_files_per_single_merger = 32;
 		// if GetOutBlock() returns more than ...say 16, spawn a merge-reducer
 		size_t temp_file_count = m_file_priority_queue.size();
 		if ( (m_done_inmem||m_reduce_phase) && 
@@ -355,10 +355,12 @@ SortReduce<K,V>::ManagerThread() {
 
 			//SortReduceReducer::StreamMergeReducer<K,V>* merger;
 			SortReduceReducer::MergeReducer<K,V>* merger;
+			printf( "Want to start storage-storage merge with %d inputs out of %d %s\n", to_sort, temp_file_count, last_merge?"last":"not last" );
 			if ( last_merge ) {
 				//merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory, m_config->output_filename);
 				
 				if ( m_config->output_filename == "" ) {
+					//FIXME...
 					SortReduceReducer::MergeReducer_MultiTree<K,V>* mmerger = new SortReduceReducer::MergeReducer_MultiTree<K,V>(m_config->update, m_config->temporary_directory, m_maximum_threads);
 					mp_result_stream_reader = mmerger->GetResultReader();
 					merger = mmerger;
@@ -423,10 +425,17 @@ SortReduce<K,V>::ManagerThread() {
 		size_t sorted_blocks_cnt = mp_block_sorter->GetOutBlockCount();
 		if ( !m_reduce_phase && ((m_done_input && sorted_blocks_cnt>0&&mv_stream_mergers_from_mem.empty()) || sorted_blocks_cnt >= reducer_from_mem_fan_in) 
 			&& mv_stream_mergers_from_mem.size() < (size_t)reducer_from_mem_max_count ) {
-
-			//SortReduceReducer::StreamMergeReducer<K,V>* merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory);
-			SortReduceReducer::MergeReducer<K,V>* merger = new SortReduceReducer::MergeReducer_MultiTree<K,V>(m_config->update, m_config->temporary_directory, 2, ""); // Just so we can use acceleration
+			
 			int to_sort = (sorted_blocks_cnt > reducer_from_mem_fan_in_max)?reducer_from_mem_fan_in_max:sorted_blocks_cnt; //TODO
+
+			SortReduceReducer::MergeReducer<K,V>* merger = NULL;
+			if ( to_sort == 1 ) {
+				//FIXME just write it to file!
+				merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory);
+			} else {
+				merger = new SortReduceReducer::MergeReducer_MultiTree<K,V>(m_config->update, m_config->temporary_directory, 2, ""); // Just so we can use acceleration
+			}
+
 			
 			for ( int i = 0; i < to_sort; i++ ) {
 				SortReduceTypes::Block block = mp_block_sorter->GetOutBlock();

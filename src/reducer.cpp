@@ -21,6 +21,7 @@ void
 SortReduceReducer::FileWriterNode<K,V>::CreateFile(std::string temp_directory, std::string filename) {
 	this->mp_temp_file_manager = new TempFileManager(temp_directory);
 	this->m_out_file = this->mp_temp_file_manager->CreateEmptyFile(filename);
+	//printf( "MergerNodeAccel Created file %s %s -- %p\n", temp_directory.c_str(), filename.c_str(), m_out_file );
 }
 
 template <class K, class V>
@@ -41,7 +42,7 @@ SortReduceReducer::FileWriterNode<K,V>::EmitBlock(void* buffer, size_t bytes) {
 		m_out_block.valid_bytes = m_out_block.bytes;
 		while ( !this->mp_temp_file_manager->Write(this->m_out_file, m_out_block, m_out_file_offset) ) usleep(50);
 		m_out_file_offset += m_out_block.valid_bytes;
-			
+
 		m_out_block = mp_buffer_manager->GetBuffer();
 		while (!m_out_block.valid) {
 			this->mp_temp_file_manager->CheckDone();
@@ -330,6 +331,7 @@ SortReduceReducer::BlockReaderNode<K,V>::GetBlock() {
 template <class K, class V>
 void
 SortReduceReducer::BlockReaderNode<K,V>::ReturnBlock(SortReduceTypes::Block block) {
+	//FIXME 
 	AlignedBufferManager* buffer_manager = AlignedBufferManager::GetInstance(0);
 	//printf( "!!!!!!\n" ); fflush(stdout);
 	if ( block.last == false ) {

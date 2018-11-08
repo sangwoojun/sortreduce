@@ -62,6 +62,9 @@ namespace SortReduceReducer {
 
 		bool m_write_file;
 
+		size_t m_total_write_bytes;
+		size_t m_total_read_bytes;
+
 
 
 		int m_source_count;

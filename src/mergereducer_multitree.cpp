@@ -14,6 +14,8 @@ SortReduceReducer::MergeReducer_MultiTree<K,V>::MergeReducer_MultiTree(V (*updat
 	m_temp_directory = temp_directory;
 	m_filename = filename;
 
+	//printf( "MergeReducer_MultiTree created with %s-%s %s %s\n", temp_directory, filename, m_temp_directory, m_filename );
+
 	this->mvv_tree_nodes.push_back(std::vector<BlockSource<K,V>*>());
 
 	this->mp_reducer_node_to_file = NULL;
@@ -71,16 +73,17 @@ SortReduceReducer::MergeReducer_MultiTree<K,V>::Start() {
 	bool accelerate = false;
 	mp_merger_accel = NULL;
 #ifdef HW_ACCEL
+	//TODO mutex... or something...
 	if ( !MergerNodeAccel<K,V>::InstanceExist() ) {
-		accelerate = true;
 		mp_merger_accel = new MergerNodeAccel<K,V>(NULL, m_temp_directory, m_filename);
+		accelerate = true;
+		//printf( "MergeReducer_MultiTree creating Accel with %s %s\n", m_temp_directory, m_filename );
 	}
 #endif
 
 
 
-	printf( "MergeReducer_MultiTree started with %lu files\n", input_count ); fflush(stdout);
-
+	printf( "MergeReducer_MultiTree started with %lu files and %d threads\n", input_count, m_maximum_threads ); fflush(stdout);
 
 
 	int cur_level = 0;
@@ -94,10 +97,10 @@ SortReduceReducer::MergeReducer_MultiTree<K,V>::Start() {
 	} else if ( m_maximum_threads < 4 ) {
 		maximum_2to1_nodes = 1;
 		thread_budget_left --; // reducer thread
-	} else if ( m_maximum_threads < 8 ) {
+	} else if ( m_maximum_threads < 12 ) { // 12 = 4 + 8
 		maximum_2to1_nodes = 2;
 		thread_budget_left -= 2; // 2-to-1, reducer
-	} else if ( m_maximum_threads < 16 ) {
+	} else if ( m_maximum_threads < 24) { // 24 = 8 + 16
 		maximum_2to1_nodes = 4;
 		thread_budget_left -= 4; // 3* 2-to-1, reducer
 	} else {
@@ -110,11 +113,12 @@ SortReduceReducer::MergeReducer_MultiTree<K,V>::Start() {
 		mvv_tree_nodes.push_back(std::vector<BlockSource<K,V>*>());
 
 
-		if ( cur_level_count > maximum_2to1_nodes*2 ) {
+		if ( cur_level_count > maximum_2to1_nodes ) {
 			// Does this just once
 			int leaves_per_node = cur_level_count/maximum_2to1_nodes;
 			if ( cur_level_count % maximum_2to1_nodes > 0 ) leaves_per_node ++;
 			int node_count = maximum_2to1_nodes;
+
 			int forward_cnt = 0;
 			if ( thread_budget_left < maximum_2to1_nodes ) {
 				forward_cnt = maximum_2to1_nodes - thread_budget_left;
@@ -127,13 +131,14 @@ SortReduceReducer::MergeReducer_MultiTree<K,V>::Start() {
 				} else {
 					leaves_per_node = remain_cnt;
 					node_count = 1;
+					fprintf(stderr, "MergeReducer_MultiTree: Thread budget should never be zero!\n");
 				}
 			}
 
 			for ( int i = 0; i < node_count; i++ ) {
 				MergerNode<K,V>* merger = new MergerNode<K,V>(1024*1024*4, 4, this->mp_update, cur_level);
 				for ( int j = 0; j < leaves_per_node; j++ ) {
-					if ( (size_t)i*leaves_per_node+j >= mvv_tree_nodes[cur_level].size() ) break;
+					if ( (size_t)(forward_cnt + i*leaves_per_node + j) >= mvv_tree_nodes[cur_level].size() ) break;
 
 					merger->AddSource(mvv_tree_nodes[cur_level][forward_cnt + i*leaves_per_node+j]);
 				}
@@ -144,12 +149,12 @@ SortReduceReducer::MergeReducer_MultiTree<K,V>::Start() {
 				mv_tree_nodes_seq.push_back(merger);
 			}
 			if ( thread_budget_left < maximum_2to1_nodes ) {
-				for ( int i = node_count; i < maximum_2to1_nodes; i++ ) {
+				for ( int i = 0; i < forward_cnt; i++ ) {
 					mvv_tree_nodes[cur_level+1].push_back(mvv_tree_nodes[cur_level][i]);
 				}
 			}
 		} else {
-			if ( accelerate ) {
+			if ( accelerate && cur_level_count <= HW_MAXIMUM_SOURCES ) {
 				for ( int i = 0; i < cur_level_count; i++ ) {
 					mp_merger_accel->AddSource(mvv_tree_nodes[cur_level][i]);
 				}
@@ -219,6 +224,10 @@ SortReduceReducer::MergeReducer_MultiTree<K,V>::GetOutFile() {
 	if ( mp_reducer_node_to_file != NULL ) {
 		return this->mp_reducer_node_to_file->GetOutFile(); 
 	} 
+	
+	if ( mp_merger_accel != NULL ) {
+		return mp_merger_accel->GetOutFile();
+	}
 
 	return NULL;
 }

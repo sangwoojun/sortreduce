@@ -27,8 +27,9 @@ int main(int argc, char** argv) {
 	SortReduceTypes::Config<uint64_t,uint32_t>* conf =
 		new SortReduceTypes::Config<uint64_t,uint32_t>(tmp_dir, "out.sr", 8);
 	conf->SetUpdateFunction(&update_function);
-	conf->SetMaxBytesInFlight(1024*1024*1024); 		// 1 GiB
-	conf->SetManagedBufferSize(1024*1024*32, 64); // 4 GiB
+	//conf->SetMaxBytesInFlight(1024*1024*1024); 		// 1 GiB
+	conf->SetManagedBufferSize(1024*1024*8, 256); // 4 GiB
+
 
 	std::map<uint64_t,uint32_t> golden_map;
 	SortReduce<uint64_t,uint32_t>* sr = new SortReduce<uint64_t,uint32_t>(conf);
@@ -92,19 +93,19 @@ int main(int argc, char** argv) {
 		total_sum += val;
 
 		if ( last_key > key ) {
-			printf( "ERROR: Result key order wrong %lx %lx -- %x\n", last_key, key, val );
+			printf( "ERROR: %lx Result key order wrong %lx %lx -- %x\n", total_count, last_key, key, val );
 		}
 		last_key = key;
 
 		if ( golden_map.find(key) == golden_map.end() ) {
 			nonexist_count ++;
-			printf( "ERROR: nonexist %lx -- %x\n", key, val );
+			printf( "ERROR: %lx nonexist %lx -- %x\n", total_count, key, val );
 		} else {
 			if ( golden_map[key] != val ) {
 				mismatch_count ++;
 				mismatch_diff += golden_map[key]-val;
-				printf( "ERROR: mismatch %lx: %x -- %x, diff: %d\n",
-					key, golden_map[key], val, golden_map[key]-val);
+				printf( "ERROR: %lx mismatch %lx: %x -- %x, diff: %d\n",
+					total_count, key, golden_map[key], val, golden_map[key]-val);
 			} else {
 				correct_count ++;
 			}
