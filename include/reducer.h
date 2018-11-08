@@ -18,6 +18,7 @@ namespace SortReduceReducer {
 	class StreamFileReader {
 	public:
 		StreamFileReader(std::string temp_directory, bool verbose = false);
+		~StreamFileReader();
 		void PutFile(SortReduceTypes::File* file);
 		SortReduceTypes::Block LoadNextFileBlock(int src, bool pop = false);
 		void ReturnBuffer(SortReduceTypes::Block block);

@@ -145,6 +145,10 @@ SortReduceReducer::StreamFileReader::StreamFileReader(std::string temp_directory
 	this->mp_temp_file_manager = new TempFileManager(temp_directory, verbose);
 }
 
+SortReduceReducer::StreamFileReader::~StreamFileReader() {
+	delete this->mp_temp_file_manager;
+}
+
 void
 SortReduceReducer::StreamFileReader::PutFile(SortReduceTypes::File* file) {
 	if ( this->m_started ) {

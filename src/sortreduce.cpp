@@ -30,7 +30,7 @@ SortReduce<K,V>::SortReduce(SortReduceTypes::Config<K,V> *config) {
 
 	//Buffers for file I/O
 	AlignedBufferManager* buffer_manager_io = AlignedBufferManager::GetInstance(1);
-	buffer_manager_io->Init(1024*256, 1024*4); //FIXME fixed to 1 GB
+	buffer_manager_io->Init(1024*512, 1024*4); //FIXME fixed to 2 GB
 	
 	/*
 	//Buffers for inter-thread communication (in reducer)
@@ -326,8 +326,8 @@ SortReduce<K,V>::ManagerThread() {
 			}
 		}
 
-		size_t min_files_per_single_merger = 16;
-		size_t max_files_per_single_merger = 32;
+		size_t min_files_per_single_merger = 32;
+		size_t max_files_per_single_merger = 128;
 		// if GetOutBlock() returns more than ...say 16, spawn a merge-reducer
 		size_t temp_file_count = m_file_priority_queue.size();
 		if ( (m_done_inmem||m_reduce_phase) && 
@@ -338,9 +338,8 @@ SortReduce<K,V>::ManagerThread() {
 
 			//((m_done_inmem&&temp_file_count>1) || temp_file_count >= 16) 
 			//&& mv_stream_mergers_from_storage.size() < (size_t)m_maximum_threads 
-			&& cur_thread_count + 2 < m_maximum_threads 
+			&& cur_thread_count + 2 <= m_maximum_threads 
 			&& mv_stream_mergers_from_storage.size() < 32 // FIXME(because of read buffer count)
-			&& mv_stream_mergers_from_storage.size() < 1 // FIXME
 			) {
 			
 			int to_sort = temp_file_count>max_files_per_single_merger?max_files_per_single_merger:temp_file_count;
