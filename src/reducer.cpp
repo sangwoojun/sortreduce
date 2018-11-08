@@ -139,6 +139,7 @@ SortReduceReducer::StreamFileWriterNode<K,V>::EmitFlush() {
 SortReduceReducer::StreamFileReader::StreamFileReader(std::string temp_directory, bool verbose) {
 	this->m_total_reads_inflight = 0;
 	this->m_started = false;
+	this->m_verbose = verbose;
 
 	this->mp_buffer_manager = AlignedBufferManager::GetInstance(1);
 	this->mp_temp_file_manager = new TempFileManager(temp_directory, verbose);
@@ -167,7 +168,10 @@ SortReduceReducer::StreamFileReader::PutFile(SortReduceTypes::File* file) {
 	//FileReadReq(cur_count);
 	LoadNextFileBlock(cur_count);
 
-	//printf( "StreamFileReader reading file %s : %ld\n", file->path.c_str(), file->bytes );
+	if ( m_verbose ) {
+		printf( "StreamFileReader reading file %s : %ld\n", file->path.c_str(), file->bytes );
+		fflush(stdout);
+	}
 }
 
 // This method is not thread-safe!
@@ -203,7 +207,10 @@ SortReduceReducer::StreamFileReader::FileReadReq(int src) {
 		} else {
 			mp_buffer_manager->ReturnBuffer(block);
 		}
-		//printf("StreamFileReader reading %d %lx %ld\n", src, mv_file_offset[src], block.valid_bytes );
+		if ( m_verbose ) {
+			printf("StreamFileReader reading %d %lx %ld\n", src, mv_file_offset[src], block.valid_bytes );
+			fflush(stdout);
+		}
 	}
 	//printf( "Block %ld %d\n",block.bytes,block.managed_idx ); fflush(stdout);
 }
@@ -245,6 +252,10 @@ SortReduceReducer::StreamFileReader::LoadNextFileBlock(int src, bool pop) {
 	}
 
 	//FileReadReq(src);
+	if ( m_verbose ){
+		printf( "StreamFileReader loading from %d %s\n", src, pop?"pop":"nopop" );
+		fflush(stdout);
+	}
 
 	if ( !mvq_ready_blocks[src].empty() ) {
 		ret = mvq_ready_blocks[src].front();

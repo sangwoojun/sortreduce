@@ -27,6 +27,8 @@ namespace SortReduceReducer {
 	private:
 		bool m_started;
 
+		bool m_verbose;
+
 		std::vector<SortReduceTypes::File*> mv_file_sources;
 
 		AlignedBufferManager* mp_buffer_manager;

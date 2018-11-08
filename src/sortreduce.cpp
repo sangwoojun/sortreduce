@@ -338,8 +338,9 @@ SortReduce<K,V>::ManagerThread() {
 
 			//((m_done_inmem&&temp_file_count>1) || temp_file_count >= 16) 
 			//&& mv_stream_mergers_from_storage.size() < (size_t)m_maximum_threads 
-			&& cur_thread_count < m_maximum_threads 
+			&& cur_thread_count + 2 < m_maximum_threads 
 			&& mv_stream_mergers_from_storage.size() < 32 // FIXME(because of read buffer count)
+			&& mv_stream_mergers_from_storage.size() < 1 // FIXME
 			) {
 			
 			int to_sort = temp_file_count>max_files_per_single_merger?max_files_per_single_merger:temp_file_count;
@@ -368,7 +369,7 @@ SortReduce<K,V>::ManagerThread() {
 					merger = new SortReduceReducer::MergeReducer_MultiTree<K,V>(m_config->update, m_config->temporary_directory, m_maximum_threads, m_config->output_filename);
 				}
 			} else if ( cur_thread_count + 2 <= m_maximum_threads ) {
-				merger = new SortReduceReducer::MergeReducer_MultiTree<K,V>(m_config->update, m_config->temporary_directory, m_maximum_threads-cur_thread_count, "");
+				merger = new SortReduceReducer::MergeReducer_MultiTree<K,V>(m_config->update, m_config->temporary_directory, (m_maximum_threads-cur_thread_count)>4?4:(m_maximum_threads-cur_thread_count), "");
 			} else {
 				// Invisible temporary file
 				merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory);
