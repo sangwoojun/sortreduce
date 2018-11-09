@@ -55,6 +55,7 @@ namespace SortReduceReducer {
 	class FileWriterNode {
 	public:
 		FileWriterNode();
+		~FileWriterNode();
 		SortReduceTypes::File* GetOutFile() { return m_out_file; };
 	protected:
 		void CreateFile(std::string temp_directory, std::string filename);
@@ -76,6 +77,7 @@ namespace SortReduceReducer {
 	class StreamFileWriterNode {
 	public:
 		StreamFileWriterNode(std::string temp_directory, std::string filename);
+		~StreamFileWriterNode();
 		SortReduceTypes::File* GetOutFile() { return m_out_file; };
 	protected:
 		void EmitKv(K key, V val);

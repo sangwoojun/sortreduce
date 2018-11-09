@@ -22,31 +22,14 @@ TempFileManager::TempFileManager(std::string path, bool verbose) {
 }
 
 TempFileManager::~TempFileManager() {
+	CheckDone();
+	while ( mq_free_bufs.size() != AIO_DEPTH ) {
+		CheckDone();
+		printf( "TempFileManager destructor still waiting for results %d\n", AIO_DEPTH-mq_free_bufs.size() );
+	}
 	io_destroy(m_io_ctx);
 }
 
-/*
-SortReduceTypes::File*
-TempFileManager::CreateFile(void* buffer, size_t bytes, size_t valid_bytes, bool free_buffer_after_done) {
-	m_mutex.lock();
-	m_writing_bytes += bytes;
-	m_mutex.unlock();
-
-	printf( "Creating file %lu %lu\n", bytes, valid_bytes ); fflush(stdout);
-
-	int fd = open(m_base_path.c_str(), O_RDWR|O_DIRECT|O_TMPFILE, S_IRUSR|S_IWUSR);
-
-	//WaitWrite(fd, buffer, bytes, valid_bytes, 0, free_buffer_after_done);
-	//FIXME
-
-	SortReduceTypes::File* ret = new SortReduceTypes::File();
-	ret->fd = fd;
-	//FIXME bytes should not be updated untill writes are actually completed
-	ret->bytes = bytes;
-
-	return ret;
-}
-*/
 
 SortReduceTypes::File*
 TempFileManager::CreateEmptyFile(std::string filename) {
@@ -72,6 +55,10 @@ TempFileManager::CreateEmptyFile(std::string filename) {
 	
 	m_mutex.unlock();
 
+	if ( fd < 0 ) {
+		printf( "TempFileManager CreateEmptyFile error withd %s %d\n", strerror(errno), errno );
+	}
+
 
 	SortReduceTypes::File* ret = new SortReduceTypes::File();
 	ret->fd = fd;
@@ -82,46 +69,6 @@ TempFileManager::CreateEmptyFile(std::string filename) {
 	return ret;
 }
 
-/*
-bool 
-TempFileManager::Write(int fd, void* buffer, size_t bytes, size_t valid_bytes, off_t offset, bool free_buffer_after_done) {
-	bool ret = false;
-
-		
-	CheckDone();
-	
-	m_mutex.lock();
-
-	if ( !mq_free_bufs.empty() ) {
-		int idx = mq_free_bufs.front();
-		mq_free_bufs.pop();
-
-		memset(&ma_iocb[idx], 0, sizeof(ma_iocb[idx]));
-		io_prep_pwrite(&ma_iocb[idx], fd, buffer, valid_bytes, offset);
-
-		IocbArgs* args = &ma_request_args[idx];
-		args->bytes = bytes;
-		args->buffer = buffer;
-		args->write = true;
-		args->busy = true;
-		args->free_buffer_after_done = free_buffer_after_done;
-
-		ma_iocb[idx].data = args;
-
-		struct iocb* iocbs = &ma_iocb[idx];
-		int ret_count = io_submit(m_io_ctx, 1, &iocbs);
-		if ( ret_count > 0 ) {
-			ret = true;
-		} else {
-			mq_free_bufs.push(idx);
-		}
-	}
-
-	m_mutex.unlock();
-
-	return ret;
-}
-*/
 
 bool 
 TempFileManager::Write(SortReduceTypes::File* file, SortReduceTypes::Block block, size_t offset) {
@@ -171,6 +118,9 @@ TempFileManager::Write(SortReduceTypes::File* file, SortReduceTypes::Block block
 				fflush(stdout);
 			}
 		} else {
+			if ( ret_count < 0 ) {
+				//printf( "TempFileManager write returned %d\n", ret_count );
+			}
 			mq_free_bufs.push(idx);
 		}
 	}
@@ -237,6 +187,9 @@ TempFileManager::Read(SortReduceTypes::File* file, size_t offset, size_t bytes, 
 			}
 
 		} else {
+			if ( ret_count < 0 ) {
+				//printf( "TempFileManager Read returned %d\n", ret_count );
+			}
 			mq_free_bufs.push(idx);
 		}
 	}

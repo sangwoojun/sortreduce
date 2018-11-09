@@ -13,9 +13,21 @@ SortReduceReducer::FileWriterNode<K,V>::FileWriterNode() {
 	this->m_out_file_offset = 0;
 	this->mp_buffer_manager = AlignedBufferManager::GetInstance(1);
 	
+	this->mp_temp_file_manager = NULL;
+	
 	// wait until data actually available
 	m_out_block.valid = false;
 }
+template <class K, class V>
+SortReduceReducer::FileWriterNode<K,V>::~FileWriterNode() {
+	if (mp_temp_file_manager!= NULL && m_out_offset > 0 && m_out_block.valid ) {
+		EmitFlush();
+	}
+	if ( this->mp_temp_file_manager != NULL ) {
+		delete this->mp_temp_file_manager;
+	}
+}
+
 template <class K, class V>
 void
 SortReduceReducer::FileWriterNode<K,V>::CreateFile(std::string temp_directory, std::string filename) {
@@ -59,6 +71,7 @@ SortReduceReducer::FileWriterNode<K,V>::EmitFlush() {
 	m_out_block.valid_bytes = m_out_offset;
 	while ( !this->mp_temp_file_manager->Write(this->m_out_file, m_out_block, m_out_file_offset) ) usleep(50);
 	m_out_file_offset += m_out_block.valid_bytes;
+	m_out_offset = 0;
 
 	while (this->mp_temp_file_manager->CountInFlight() > 0 ) this->mp_temp_file_manager->CheckDone();
 }
@@ -76,6 +89,12 @@ SortReduceReducer::StreamFileWriterNode<K,V>::StreamFileWriterNode(std::string t
 		mp_temp_file_manager->CheckDone();
 		m_out_block = mp_buffer_manager->GetBuffer();
 	}
+}
+template <class K, class V>
+SortReduceReducer::StreamFileWriterNode<K,V>::~StreamFileWriterNode() {
+	if ( m_out_offset > 0 ) EmitFlush();
+
+	delete this->mp_temp_file_manager;
 }
 
 template <class K, class V>
@@ -132,6 +151,7 @@ SortReduceReducer::StreamFileWriterNode<K,V>::EmitFlush() {
 	m_out_block.valid_bytes = m_out_offset;
 	while ( !this->mp_temp_file_manager->Write(this->m_out_file, m_out_block, m_out_file_offset) ) usleep(50);
 	m_out_file_offset += m_out_block.valid_bytes;
+	m_out_offset = 0;
 
 	while (this->mp_temp_file_manager->CountInFlight() > 0 ) this->mp_temp_file_manager->CheckDone();
 }
@@ -1164,10 +1184,12 @@ SortReduceReducer::MergerNode<K,V>::WorkerThreadN() {
 	if (mp_update != NULL) {
 		this->EmitKvPair(last_kvp.key, last_kvp.val);
 	}
+	
+	printf( "MergerNodeN flushing emit!\n" ); fflush(stdout);
 
 	this->FinishEmit();
 	
-	//printf( "MergerNodeN end reached -- %ld!\n", cnt ); fflush(stdout);
+	printf( "MergerNodeN end reached!\n" ); fflush(stdout);
 	
 	for ( int i = 0; i < source_count; i++ ) {
 		delete readers[i];

@@ -131,6 +131,8 @@ SortReduceReducer::MergeReducer_MultiTree<K,V>::Start() {
 				forward_cnt = maximum_2to1_nodes - thread_budget_left;
 				int remain_cnt = cur_level_count - forward_cnt;
 
+				printf( "MergeReducer_MultiTree:: setting forward_cnt to %d\n", forward_cnt );
+
 				if ( thread_budget_left > 0 ) {
 					leaves_per_node = remain_cnt/thread_budget_left;
 					if ( remain_cnt % thread_budget_left > 0 ) leaves_per_node ++;

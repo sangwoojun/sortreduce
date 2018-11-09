@@ -23,6 +23,9 @@ SortReduce<K,V>::SortReduce(SortReduceTypes::Config<K,V> *config) {
 
 	this->m_cur_update_block.valid = false;
 	this->m_cur_update_block.bytes = 0;
+
+	printf( "SortReduce Starting...\n" );
+	printf( "Remember to set per-thread open file limit to be larger at /etc/security/limits.conf\n" );
 	
 	//Buffers for in-memory sorting
 	AlignedBufferManager* managed_buffers = AlignedBufferManager::GetInstance(0);
@@ -355,7 +358,7 @@ SortReduce<K,V>::ManagerThread() {
 
 			//SortReduceReducer::StreamMergeReducer<K,V>* merger;
 			SortReduceReducer::MergeReducer<K,V>* merger;
-			printf( "Want to start storage-storage merge with %d inputs out of %d %s\n", to_sort, temp_file_count, last_merge?"last":"not last" );
+			printf( "Want to start storage-storage merge with %d inputs out of %ld %s\n", to_sort, temp_file_count, last_merge?"last":"not last" );
 			if ( last_merge ) {
 				//merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory, m_config->output_filename);
 				
