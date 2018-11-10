@@ -166,6 +166,9 @@ SortReduceReducer::StreamFileReader::StreamFileReader(std::string temp_directory
 }
 
 SortReduceReducer::StreamFileReader::~StreamFileReader() {
+	for ( size_t i = 0; i < mv_file_sources.size(); i++ ) {
+		mp_temp_file_manager->Close(mv_file_sources[i]);
+	}
 	delete this->mp_temp_file_manager;
 }
 

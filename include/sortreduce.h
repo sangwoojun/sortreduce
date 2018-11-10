@@ -107,6 +107,10 @@ private:
 	SortReduceUtils::FileKvReader<K,V>* mp_file_kv_reader = NULL;
 	SortReduceReducer::BlockSourceReader<K,V>* mp_result_stream_reader = NULL;
 
+
+	SortReduceTypes::File* mp_output_file = NULL;
+public:
+	SortReduceTypes::File* GetOutFile() {return mp_output_file;};
 };
 
 #endif

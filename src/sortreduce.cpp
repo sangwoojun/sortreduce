@@ -33,7 +33,7 @@ SortReduce<K,V>::SortReduce(SortReduceTypes::Config<K,V> *config) {
 
 	//Buffers for file I/O
 	AlignedBufferManager* buffer_manager_io = AlignedBufferManager::GetInstance(1);
-	buffer_manager_io->Init(1024*512, 1024*4); //FIXME fixed to 2 GB
+	buffer_manager_io->Init(1024*1024, 1024*4); //FIXME fixed to 4 GB
 	
 	/*
 	//Buffers for inter-thread communication (in reducer)
@@ -498,6 +498,7 @@ SortReduce<K,V>::ManagerThread() {
 				mp_file_kv_reader = new SortReduceUtils::FileKvReader<K,V>(m_file_priority_queue.top(), m_config);
 			}
 
+			mp_output_file = m_file_priority_queue.top();
 			m_done_external = true;
 
 			printf( "Sort-reduce all done! Processed %lu blocks\n", total_blocks_sorted); 
