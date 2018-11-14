@@ -6,7 +6,6 @@ TODO
 consolidate arguments to blocksorter/blocksorterthread into one config*
 TempFileManager writes need to have information about <512 bit filesize alignment
 TempFileManager returns alignedbuffermanager
-Check if StreamReducer's destructor is actually working
 mp_status->bytes_inflight management is wrong for non-managed blocks
 
 Storage->Storage instance should be limited due to input aligned buffer count
@@ -33,13 +32,7 @@ SortReduce<K,V>::SortReduce(SortReduceTypes::Config<K,V> *config) {
 
 	//Buffers for file I/O
 	AlignedBufferManager* buffer_manager_io = AlignedBufferManager::GetInstance(1);
-	buffer_manager_io->Init(1024*1024, 1024*4); //FIXME fixed to 4 GB
-	
-	/*
-	//Buffers for inter-thread communication (in reducer)
-	AlignedBufferManager* buffer_manager_itc = AlignedBufferManager::GetInstance(2);
-	buffer_manager_itc->Init(1024*32, 1024*4); //FIXME fixed size
-	*/
+	buffer_manager_io->Init(1024*256, 1024*2*16); //FIXME set to maximum of 8 GBs. Is this enough?
 
 	this->m_config = config;
 	if ( config->update == NULL ) {
