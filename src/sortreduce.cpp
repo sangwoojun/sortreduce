@@ -32,7 +32,7 @@ SortReduce<K,V>::SortReduce(SortReduceTypes::Config<K,V> *config) {
 
 	//Buffers for file I/O
 	AlignedBufferManager* buffer_manager_io = AlignedBufferManager::GetInstance(1);
-	buffer_manager_io->Init(1024*1024*2, 1024*32); //FIXME set to maximum of ... very large GBs. 
+	buffer_manager_io->Init(1024*1024*2, 1024*128); //FIXME set to maximum of ... very large GBs. 
 
 	this->m_config = config;
 	if ( config->update == NULL ) {
