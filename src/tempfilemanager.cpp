@@ -291,7 +291,7 @@ TempFileManager::CountFreeBuffers() {
 **/
 void
 TempFileManager::Close(SortReduceTypes::File* file) {
-	//unlink(file->path.c_str());
+	unlink(file->path.c_str());
 	close(file->fd);
 }
 

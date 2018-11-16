@@ -32,7 +32,7 @@ SortReduce<K,V>::SortReduce(SortReduceTypes::Config<K,V> *config) {
 
 	//Buffers for file I/O
 	AlignedBufferManager* buffer_manager_io = AlignedBufferManager::GetInstance(1);
-	buffer_manager_io->Init(1024*256, 1024*2*16); //FIXME set to maximum of 8 GBs. Is this enough?
+	buffer_manager_io->Init(1024*1024, 1024*2*16); //FIXME set to maximum of 32 GBs. Is this enough?
 
 	this->m_config = config;
 	if ( config->update == NULL ) {
@@ -322,8 +322,8 @@ SortReduce<K,V>::ManagerThread() {
 			}
 		}
 
-		size_t min_files_per_single_merger = 32;
-		size_t max_files_per_single_merger = 64;
+		size_t min_files_per_single_merger = 64;
+		size_t max_files_per_single_merger = 128;
 		// if GetOutBlock() returns more than ...say 16, spawn a merge-reducer
 		size_t temp_file_count = m_file_priority_queue.size();
 		if ( (m_done_inmem||m_reduce_phase) && 
