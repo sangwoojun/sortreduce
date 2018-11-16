@@ -368,7 +368,7 @@ SortReduce<K,V>::ManagerThread() {
 				if ( mmerger->AcceleratorAvailable() && to_sort > HW_MAXIMUM_SOURCES ) {
 					to_sort = HW_MAXIMUM_SOURCES;
 				} 
-				else if ( temp_file_count < max_files_per_single_merger ) {
+				else if ( mmerger->AcceleratorAvailable() && temp_file_count < max_files_per_single_merger ) {
 					// AND NOT LAST MERGE YET
 					to_sort = min_files_per_single_merger;
 				}
