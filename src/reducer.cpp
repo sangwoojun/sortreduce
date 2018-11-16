@@ -98,7 +98,7 @@ SortReduceReducer::StreamFileWriterNode<K,V>::~StreamFileWriterNode() {
 }
 
 template <class K, class V>
-void
+inline void
 SortReduceReducer::StreamFileWriterNode<K,V>::EmitKv(K key, V val) {
 	const size_t kv_bytes = sizeof(K)+sizeof(V);
 
@@ -146,7 +146,7 @@ SortReduceReducer::StreamFileWriterNode<K,V>::EmitKv(K key, V val) {
 	}
 }
 template <class K, class V>
-void
+inline void
 SortReduceReducer::StreamFileWriterNode<K,V>::EmitFlush() {
 	m_out_block.valid_bytes = m_out_offset;
 	while ( !this->mp_temp_file_manager->Write(this->m_out_file, m_out_block, m_out_file_offset) ) usleep(50);
@@ -813,7 +813,7 @@ SortReduceReducer::BlockSourceNode<K,V>::ReturnBlock(SortReduceTypes::Block bloc
 }
 
 template <class K, class V>
-void
+inline void
 SortReduceReducer::BlockSourceNode<K,V>::EmitKvPair(K key, V val) {
 /*
 	if ( m_last_key > key ) {

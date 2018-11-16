@@ -32,7 +32,7 @@ SortReduce<K,V>::SortReduce(SortReduceTypes::Config<K,V> *config) {
 
 	//Buffers for file I/O
 	AlignedBufferManager* buffer_manager_io = AlignedBufferManager::GetInstance(1);
-	buffer_manager_io->Init(1024*1024, 1024*2*16); //FIXME set to maximum of 32 GBs. Is this enough?
+	buffer_manager_io->Init(1024*1024*2, 1024*32); //FIXME set to maximum of ... very large GBs. 
 
 	this->m_config = config;
 	if ( config->update == NULL ) {
@@ -211,7 +211,7 @@ SortReduce<K,V>::ManagerThread() {
 	//printf( "maximum threads: %d\n", config->maximum_threads );
 
 	const size_t reducer_from_mem_fan_in = 32;
-	const size_t reducer_from_mem_fan_in_max = 32;
+	const size_t reducer_from_mem_fan_in_max = 2048;
 	const size_t reducer_from_storage_fan_in_max = 32;
 	int reducer_from_mem_max_count = 1;
 	
@@ -343,7 +343,7 @@ SortReduce<K,V>::ManagerThread() {
 			bool last_merge = false;
 			if ( m_done_inmem && mv_stream_mergers_from_storage.empty() 
 				&& temp_file_count < m_maximum_threads*min_files_per_single_merger
-				&& temp_file_count < HW_MAXIMUM_SOURCES) { // FIXME (because of read buffer count)
+				) {
 
 				last_merge = true;
 				to_sort = temp_file_count;
@@ -363,15 +363,18 @@ SortReduce<K,V>::ManagerThread() {
 					merger = new SortReduceReducer::MergeReducer_MultiTree<K,V>(m_config->update, m_config->temporary_directory, m_maximum_threads, m_config->output_filename);
 				}
 			} else if ( cur_thread_count + 2 <= m_maximum_threads ) {
+				//SortReduceReducer::MergeReducer_MultiTree<K,V>* mmerger = new SortReduceReducer::MergeReducer_MultiTree<K,V>(m_config->update, m_config->temporary_directory, m_maximum_threads-cur_thread_count, "");
 				SortReduceReducer::MergeReducer_MultiTree<K,V>* mmerger = new SortReduceReducer::MergeReducer_MultiTree<K,V>(m_config->update, m_config->temporary_directory, (m_maximum_threads-cur_thread_count)>4?4:(m_maximum_threads-cur_thread_count), "");
 				// FIXME This may be suboptimal if multiple manager threads are concurrent
 				if ( mmerger->AcceleratorAvailable() && to_sort > HW_MAXIMUM_SOURCES ) {
 					to_sort = HW_MAXIMUM_SOURCES;
 				} 
+				/*
 				else if ( mmerger->AcceleratorAvailable() && temp_file_count < max_files_per_single_merger ) {
 					// AND NOT LAST MERGE YET
 					to_sort = min_files_per_single_merger;
 				}
+				*/
 				merger = mmerger;
 			} else {
 				// Invisible temporary file
@@ -438,7 +441,11 @@ SortReduce<K,V>::ManagerThread() {
 				//FIXME just write it to file!
 				merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory);
 			} else {
-				merger = new SortReduceReducer::MergeReducer_MultiTree<K,V>(m_config->update, m_config->temporary_directory, 2, ""); // Just so we can use acceleration
+				SortReduceReducer::MergeReducer_MultiTree<K,V>* mmerger = new SortReduceReducer::MergeReducer_MultiTree<K,V>(m_config->update, m_config->temporary_directory, 2, ""); // Just so we can use acceleration
+				if ( mmerger->AcceleratorAvailable() && to_sort > HW_MAXIMUM_SOURCES ) {
+					to_sort = HW_MAXIMUM_SOURCES;
+				} 
+				merger = mmerger;
 			}
 
 			
