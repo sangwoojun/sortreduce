@@ -25,7 +25,7 @@ TempFileManager::~TempFileManager() {
 	CheckDone();
 	while ( mq_free_bufs.size() != AIO_DEPTH ) {
 		CheckDone();
-		printf( "TempFileManager destructor still waiting for results %d\n", AIO_DEPTH-mq_free_bufs.size() );
+		printf( "TempFileManager destructor still waiting for results %ld\n", AIO_DEPTH-mq_free_bufs.size() );
 	}
 	io_destroy(m_io_ctx);
 }
@@ -157,7 +157,7 @@ TempFileManager::Read(SortReduceTypes::File* file, size_t offset, size_t bytes, 
 		size_t ofrag = offset & 0x1ff;
 		if ( ofrag != 0 ) {
 			offset = offset-ofrag;
-			printf("TempFileManager::Read offset should always be 512 bytes aligned!\n");
+			printf("WARNING: TempFileManager::Read offset should always be 512 bytes aligned!\n");
 			fflush(stdout);
 		}
 
@@ -291,7 +291,7 @@ TempFileManager::CountFreeBuffers() {
 **/
 void
 TempFileManager::Close(SortReduceTypes::File* file) {
-	unlink(file->path.c_str());
+	//unlink(file->path.c_str());
 	close(file->fd);
 }
 

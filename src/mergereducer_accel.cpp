@@ -144,8 +144,10 @@ SortReduceReducer::MergerNodeAccel<K,V>::WorkerThread() {
 	uint32_t wbi = pcie->userReadWord(3*4);
 	uint32_t write_buffers_inflight = wbi & 0xffff;
 	uint32_t last_write_buffer_idx = (wbi>>16);
+	
+	uint32_t mask = pcie->userReadWord(2*4);
 
-	printf( "MergerNodeAccel -- %lx %lx\n", write_buffers_inflight, last_write_buffer_idx );
+	printf( "MergerNodeAccel -- %x %x %x\n", write_buffers_inflight, last_write_buffer_idx, mask );
 	if ( write_buffers_inflight > 0 ) {
 		m_cur_write_buffer_idx = last_write_buffer_idx+1;
 	}
@@ -160,6 +162,8 @@ SortReduceReducer::MergerNodeAccel<K,V>::WorkerThread() {
 	m_total_write_bytes = 0;
 	m_total_read_bytes = 0;
 
+
+	int sources_left = 0;
 	
 	for ( int i = 0; i < HW_MAXIMUM_SOURCES; i++ ) {
 		if ( i < m_source_count ) {
@@ -169,10 +173,15 @@ SortReduceReducer::MergerNodeAccel<K,V>::WorkerThread() {
 					break;
 				}
 			}
+			sources_left ++;
 		} else {
 			SendReadBlockDone(i);
 		}
 	}
+
+	usleep(100);
+	mask = pcie->userReadWord(2*4);
+	printf( "MergerNodeAccel %d sources in flight. Mask %x\n", sources_left, mask );
 
 
 	bool last = false;
@@ -204,15 +213,18 @@ SortReduceReducer::MergerNodeAccel<K,V>::WorkerThread() {
 		while (read_done != 0xffffffff) {
 			
 			if ( maq_read_buffers_inflight[read_done].empty() ) {
-				fprintf(stderr, "MergerNodeAccel returned read buffer that was not issued\n" );
+				fprintf(stderr, "MergerNodeAccel returned read buffer that was not issued -- %d\n", read_done );
 			}
 			int returned_dma_idx = maq_read_buffers_inflight[read_done].front();
 			maq_read_buffers_inflight[read_done].pop();
 			mq_free_dma_idx.push(returned_dma_idx);
 
-			//printf( "Read done from source %d\n", read_done );
 			if ( !SendReadBlock(ma_sources[read_done], read_done) ) {
 				SendReadBlockDone(read_done);
+				sources_left--;
+				//printf( "Read done from source %d final\n", read_done );
+			} else {
+				//printf( "Read done from source %d\n", read_done );
 			}
 			read_done = pcie->userReadWord(0);
 		}
@@ -224,12 +236,23 @@ SortReduceReducer::MergerNodeAccel<K,V>::WorkerThread() {
 
 			m_total_write_bytes += bytes;
 
+			//printf( "MergerNodeAccel write done %lx %lx\n", idx, bytes );
 			if ( m_write_file ) {
 				uint8_t* ptr = (dmabuf+(idx*1024*4));
-				this->EmitBlock(ptr, bytes);
-				//printf( "MergerNodeAccel emitting block %lx %lx\n", idx, bytes );
 				if ( last ) {
+					if ( m_total_write_bytes % (sizeof(K)+sizeof(V)) > 0 ) {
+						size_t total_elements = m_total_write_bytes/(sizeof(K)+sizeof(V));
+						size_t total_valid_bytes = total_elements*(sizeof(K)+sizeof(V));
+						uint32_t slack = (uint32_t)(m_total_write_bytes-total_valid_bytes);
+						bytes -= slack;
+						m_total_write_bytes -= slack;
+					}
+					//printf( "MergerNodeAccel emitting block %lx %lx, flush\n", idx, bytes );
+					this->EmitBlock(ptr, bytes);
 					this->EmitFlush();
+				} else {
+					//printf( "MergerNodeAccel emitting block %lx %lx\n", idx, bytes );
+					this->EmitBlock(ptr, bytes);
 				}
 			} else {
 				EmitDmaBlock(idx*1024*4, bytes, last);
@@ -242,6 +265,10 @@ SortReduceReducer::MergerNodeAccel<K,V>::WorkerThread() {
 		}
 		if ( last ) break;
 		if ( m_kill ) break;
+	}
+
+	if ( sources_left != 0 ) {
+		printf( "MergerNodeAccel received output finished before issuing final read to %d\n", sources_left );
 	}
 	
 	std::chrono::high_resolution_clock::time_point now;
@@ -304,8 +331,8 @@ SortReduceReducer::MergerNodeAccel<K,V>::SendReadBlock(BlockSource<K,V>* src, in
 	if ( avail >= 4096 ) {
 		memcpy(dmabuf+dmaoff, ((uint8_t*)ma_cur_read_blocks[idx].buffer)+ma_sources_offset[idx], 4096);
 	} else {
+		memset(dmabuf+dmaoff, 0xff, 4096);
 		memcpy(dmabuf+dmaoff, ((uint8_t*)ma_cur_read_blocks[idx].buffer)+ma_sources_offset[idx], avail);
-		memset(dmabuf+dmaoff+avail, 0xff, 4096-avail);
 	}
 	ma_sources_offset[idx] += 4096;
 
@@ -317,7 +344,7 @@ SortReduceReducer::MergerNodeAccel<K,V>::SendReadBlock(BlockSource<K,V>* src, in
 
 	m_total_read_bytes += 4096;
 
-	//printf( "MergerNodeAccel::SendReadBlock done\n" );
+	//printf( "MergerNodeAccel::SendReadBlock done %d to %d\n", di, idx );
 
 	return true;
 }
@@ -412,6 +439,16 @@ SortReduceReducer::MergerNodeAccel<K,V>::EmitDmaBlock(size_t offset, size_t byte
 
 	if ( last ) {
 		m_mutex.lock();
+
+		if ( m_total_out_bytes % (sizeof(K)+sizeof(V)) > 0 ) {
+			size_t total_elements = m_total_out_bytes/(sizeof(K)+sizeof(V));
+			size_t total_valid_bytes = total_elements*(sizeof(K)+sizeof(V));
+			size_t slack = m_total_out_bytes-total_valid_bytes;
+			m_out_offset -= slack;
+		}
+
+
+
 		ma_blocks[m_cur_out_idx].valid = true;
 		ma_blocks[m_cur_out_idx].last = false;
 		ma_blocks[m_cur_out_idx].valid_bytes = m_out_offset;

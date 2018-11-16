@@ -34,7 +34,7 @@ AlignedBufferManager::Init(size_t buffer_size, int buffer_count) {
 	for ( int i = 0; i < buffer_count; i++ ) {
 		//mpp_buffers[i] = aligned_alloc(512, buffer_size);
 		mpp_buffers[i] = NULL;
-		mq_free_buffers.push(i);
+		ms_free_buffers.push(i);
 	}
 
 	m_init_done = true;
@@ -52,9 +52,9 @@ AlignedBufferManager::GetBuffer() {
 
 	m_mutex.lock();
 	
-	if ( !mq_free_buffers.empty() ) {
-		int idx = mq_free_buffers.front();
-		mq_free_buffers.pop();
+	if ( !ms_free_buffers.empty() ) {
+		int idx = ms_free_buffers.top();
+		ms_free_buffers.pop();
 
 		if ( mpp_buffers[idx] == NULL ) {
 			mpp_buffers[idx] = aligned_alloc(512, m_buffer_size);
@@ -77,7 +77,7 @@ void
 AlignedBufferManager::ReturnBuffer(SortReduceTypes::Block block) {
 	m_mutex.lock();
 	//TODO check duplicates!
-	mq_free_buffers.push(block.managed_idx);
+	ms_free_buffers.push(block.managed_idx);
 	//if ( m_instance_idx == 0 ) printf( "Buffer returned %d -> %d\n", m_instance_idx, mq_free_buffers.size() );
 	m_mutex.unlock();
 }
@@ -86,7 +86,7 @@ int
 AlignedBufferManager::GetFreeCount() {
 	m_mutex.lock();
 
-	int ret = mq_free_buffers.size();
+	int ret = ms_free_buffers.size();
 
 	m_mutex.unlock();
 

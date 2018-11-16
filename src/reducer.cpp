@@ -214,7 +214,7 @@ SortReduceReducer::StreamFileReader::FileReadReq(int src) {
 		}
 
 
-		if ( block.bytes + mv_file_offset[src] <= file->bytes ) {
+		if ( block.bytes + mv_file_offset[src] < file->bytes ) {
 			block.valid_bytes = block.bytes;
 		} else {
 			block.valid_bytes = file->bytes - mv_file_offset[src];
@@ -1238,6 +1238,7 @@ SortReduceReducer::ReducerNode<K,V>::WorkerThread() {
 	uint64_t cnt = 0;
 	uint64_t rcnt = 0;
 
+	bool ignore_rest = false;
 	if (!in_block.last) {
 		last_kvp = ReducerUtils<K,V>::DecodeKvPair(&in_block, &in_off, mp_src, &m_kill);
 		rcnt++;
@@ -1251,16 +1252,22 @@ SortReduceReducer::ReducerNode<K,V>::WorkerThread() {
 				this->EmitKv(last_kvp.key, last_kvp.val);
 
 				cnt++;
-				if ( last_kvp.key > kvp.key ) {
-					printf("ReducerNode key order wrong! %lx %lx -- %lx\n", rcnt, (uint64_t)last_kvp.key, (uint64_t)kvp.key ); fflush(stdout);
-				//} else {
-					//printf("Correct order! %lx %lx -- %lx\n", rcnt, (uint64_t)last_kvp.key, (uint64_t)kvp.key ); fflush(stdout);
+				if ( !ignore_rest ) {
+					if ( last_kvp.key > kvp.key ) {
+						printf("WARNING: ReducerNode ignoring wrong order key %lx %lx -- %lx\n", rcnt, (uint64_t)last_kvp.key, (uint64_t)kvp.key ); fflush(stdout);
+						ignore_rest = true;
+					//} else {
+						//printf("Correct order! %lx %lx -- %lx\n", rcnt, (uint64_t)last_kvp.key, (uint64_t)kvp.key ); fflush(stdout);
+					} else {
+						last_kvp = kvp;
+					}
 				}
-				last_kvp = kvp;
 
 			}
 		}
-		this->EmitKv(last_kvp.key, last_kvp.val);
+		if ( !ignore_rest ) {
+			this->EmitKv(last_kvp.key, last_kvp.val);
+		}
 		cnt++;
 	}
 
@@ -1324,6 +1331,7 @@ SortReduceReducer::ReducerNodeStream<K,V>::WorkerThread() {
 	uint64_t cnt = 0;
 	uint64_t rcnt = 0;
 
+	bool ignore_rest = false;
 	if (!in_block.last) {
 		last_kvp = ReducerUtils<K,V>::DecodeKvPair(&in_block, &in_off, mp_src, &m_kill);
 		rcnt++;
@@ -1337,14 +1345,20 @@ SortReduceReducer::ReducerNodeStream<K,V>::WorkerThread() {
 				this->EmitKvPair(last_kvp.key, last_kvp.val);
 
 				cnt++;
-				if ( last_kvp.key > kvp.key ) {
-					printf("ReducerNode key order wrong! %lx %lx -- %lx\n", rcnt, (uint64_t)last_kvp.key, (uint64_t)kvp.key ); fflush(stdout);
+				if ( !ignore_rest ) {
+					if ( last_kvp.key > kvp.key ) {
+						printf("WARNING: ReducerNode ignoring wrong order key! %lx %lx -- %lx\n", rcnt, (uint64_t)last_kvp.key, (uint64_t)kvp.key ); fflush(stdout);
+						ignore_rest = true;
+					} else {
+						last_kvp = kvp;
+					}
 				}
-				last_kvp = kvp;
 
 			}
 		}
-		this->EmitKvPair(last_kvp.key, last_kvp.val);
+		if ( !ignore_rest ) {
+			this->EmitKvPair(last_kvp.key, last_kvp.val);
+		}
 		cnt++;
 	}
 

@@ -137,6 +137,7 @@ int main(int argc, char** argv) {
 	printf( "Sort-reduce done! Elapsed: %lu ms\n", duration_milli.count() ); fflush(stdout);
 
 
+	uint64_t cnt = 0;
 	uint64_t last_key = 0;
 	std::tuple<uint64_t,uint32_t,bool> kvp = sr->Next();
 	while ( std::get<2>(kvp) ) {
@@ -144,9 +145,10 @@ int main(int argc, char** argv) {
 		//uint32_t val = std::get<1>(kvp);
 
 		if ( last_key > key ) {
-			printf( "Result key order wrong %lx %lx\n", last_key, key );
+			printf( "Result key order wrong %lx : %lx %lx\n", cnt, last_key, key );
 		}
 		last_key = key;
+		cnt++;
 
 		kvp = sr->Next();
 	}

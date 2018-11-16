@@ -323,7 +323,7 @@ SortReduce<K,V>::ManagerThread() {
 		}
 
 		size_t min_files_per_single_merger = 32;
-		size_t max_files_per_single_merger = 128;
+		size_t max_files_per_single_merger = 64;
 		// if GetOutBlock() returns more than ...say 16, spawn a merge-reducer
 		size_t temp_file_count = m_file_priority_queue.size();
 		if ( (m_done_inmem||m_reduce_phase) && 
@@ -343,7 +343,7 @@ SortReduce<K,V>::ManagerThread() {
 			bool last_merge = false;
 			if ( m_done_inmem && mv_stream_mergers_from_storage.empty() 
 				&& temp_file_count < m_maximum_threads*min_files_per_single_merger
-				&& temp_file_count < 256) { // FIXME (because of read buffer count)
+				&& temp_file_count < HW_MAXIMUM_SOURCES) { // FIXME (because of read buffer count)
 
 				last_merge = true;
 				to_sort = temp_file_count;
@@ -351,24 +351,33 @@ SortReduce<K,V>::ManagerThread() {
 
 			//SortReduceReducer::StreamMergeReducer<K,V>* merger;
 			SortReduceReducer::MergeReducer<K,V>* merger;
-			printf( "Want to start storage-storage merge with %d inputs out of %ld %s\n", to_sort, temp_file_count, last_merge?"last":"not last" );
 			if ( last_merge ) {
 				//merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory, m_config->output_filename);
 				
 				if ( m_config->output_filename == "" ) {
 					//FIXME...
-					SortReduceReducer::MergeReducer_MultiTree<K,V>* mmerger = new SortReduceReducer::MergeReducer_MultiTree<K,V>(m_config->update, m_config->temporary_directory, m_maximum_threads);
+					SortReduceReducer::MergeReducer_MultiTree<K,V>* mmerger = new SortReduceReducer::MergeReducer_MultiTree<K,V>(m_config->update, "", m_maximum_threads);
 					mp_result_stream_reader = mmerger->GetResultReader();
 					merger = mmerger;
 				} else {
 					merger = new SortReduceReducer::MergeReducer_MultiTree<K,V>(m_config->update, m_config->temporary_directory, m_maximum_threads, m_config->output_filename);
 				}
 			} else if ( cur_thread_count + 2 <= m_maximum_threads ) {
-				merger = new SortReduceReducer::MergeReducer_MultiTree<K,V>(m_config->update, m_config->temporary_directory, (m_maximum_threads-cur_thread_count)>4?4:(m_maximum_threads-cur_thread_count), "");
+				SortReduceReducer::MergeReducer_MultiTree<K,V>* mmerger = new SortReduceReducer::MergeReducer_MultiTree<K,V>(m_config->update, m_config->temporary_directory, (m_maximum_threads-cur_thread_count)>4?4:(m_maximum_threads-cur_thread_count), "");
+				// FIXME This may be suboptimal if multiple manager threads are concurrent
+				if ( mmerger->AcceleratorAvailable() && to_sort > HW_MAXIMUM_SOURCES ) {
+					to_sort = HW_MAXIMUM_SOURCES;
+				} 
+				else if ( temp_file_count < max_files_per_single_merger ) {
+					// AND NOT LAST MERGE YET
+					to_sort = min_files_per_single_merger;
+				}
+				merger = mmerger;
 			} else {
 				// Invisible temporary file
 				merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory);
 			}
+			printf( "Want to start storage-storage merge with %d inputs out of %ld %s\n", to_sort, temp_file_count, last_merge?"last":"not last" );
 
 			//size_t last_bytes = 0;
 			for ( int i = 0; i < to_sort; i++ ) {

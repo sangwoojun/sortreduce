@@ -2,7 +2,7 @@
 #define __ALIGNED_BUFFER_MANAGER_H__
 
 #include <mutex>
-#include <queue>
+#include <stack>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -32,7 +32,7 @@ private:
 	size_t m_buffer_size;
 	int m_buffer_count;
 
-	std::queue<int> mq_free_buffers;
+	std::stack<int> ms_free_buffers;
 	void** mpp_buffers;
 
 	std::mutex m_mutex;
