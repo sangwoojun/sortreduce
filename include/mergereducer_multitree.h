@@ -31,6 +31,7 @@ namespace SortReduceReducer {
 		size_t GetInputFileBytes() { return this->m_input_file_bytes; };
 		int GetThreadCount() { return m_thread_count; };
 		bool AcceleratorAvailable();
+		void UserAccelerator(bool val) { m_use_accelerator = val;};
 
 
 		//for ReducerNodeStream
@@ -44,6 +45,8 @@ namespace SortReduceReducer {
 
 		int m_maximum_threads;
 		int m_thread_count;
+
+		bool m_use_accelerator;
 
 
 

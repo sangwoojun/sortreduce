@@ -22,6 +22,8 @@ SortReduceReducer::MergeReducer_MultiTree<K,V>::MergeReducer_MultiTree(V (*updat
 	this->mp_reducer_node_to_file = NULL;
 	this->mp_reducer_node_stream = NULL;
 	this->mp_block_source_reader = NULL;
+
+	this->m_use_accelerator = true;
 }
 
 template <class K, class V>
@@ -94,6 +96,7 @@ SortReduceReducer::MergeReducer_MultiTree<K,V>::Start() {
 	if ( !MergerNodeAccel<K,V>::InstanceExist() ) {
 		mp_merger_accel = new MergerNodeAccel<K,V>(NULL, m_temp_directory, m_filename);
 		accelerate = true;
+		if ( m_use_accelerator == false ) accelerate = false;
 		//printf( "MergeReducer_MultiTree creating Accel with %s %s\n", m_temp_directory, m_filename );
 	}
 #endif
@@ -186,12 +189,14 @@ SortReduceReducer::MergeReducer_MultiTree<K,V>::Start() {
 			mp_reducer_node_stream = new ReducerNodeStream<K,V>(mp_update, 1024*1024, 4);
 			mp_reducer_node_stream->SetSource(root);
 			root = mp_reducer_node_stream;
+			m_thread_count ++;
 		}
 		mp_block_source_reader = new BlockSourceReader<K,V>(root);
 	} else {
 		if ( !accelerate ) {
 			mp_reducer_node_to_file = new ReducerNode<K,V>(mp_update, m_temp_directory, m_filename);
 			mp_reducer_node_to_file->SetSource(root);
+			m_thread_count ++;
 		}
 	}
 }

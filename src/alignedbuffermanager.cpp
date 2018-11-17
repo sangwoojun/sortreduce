@@ -110,3 +110,12 @@ AlignedBufferManager::WaitBuffer() {
 AlignedBufferManager::AlignedBufferManager() {
 	m_init_done = false;
 }
+
+void
+AlignedBufferManager::ClearBuffers() {
+	for ( int i = 0; i < m_buffer_count; i++ ) {
+		void* ptr = mpp_buffers[i];
+		mpp_buffers[i] = NULL;
+		free(ptr);
+	}
+}

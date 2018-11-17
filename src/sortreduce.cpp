@@ -210,8 +210,8 @@ void
 SortReduce<K,V>::ManagerThread() {
 	//printf( "maximum threads: %d\n", config->maximum_threads );
 
-	const size_t reducer_from_mem_fan_in = 32;
-	const size_t reducer_from_mem_fan_in_max = 2048;
+	const size_t reducer_from_mem_fan_in = 128;
+	const size_t reducer_from_mem_fan_in_max = 256;
 	const size_t reducer_from_storage_fan_in_max = 32;
 	int reducer_from_mem_max_count = 1;
 	
@@ -358,18 +358,23 @@ SortReduce<K,V>::ManagerThread() {
 					//FIXME...
 					SortReduceReducer::MergeReducer_MultiTree<K,V>* mmerger = new SortReduceReducer::MergeReducer_MultiTree<K,V>(m_config->update, "", m_maximum_threads);
 					mp_result_stream_reader = mmerger->GetResultReader();
+					//mmerger->UserAccelerator(false);
 					merger = mmerger;
 				} else {
-					merger = new SortReduceReducer::MergeReducer_MultiTree<K,V>(m_config->update, m_config->temporary_directory, m_maximum_threads, m_config->output_filename);
+					SortReduceReducer::MergeReducer_MultiTree<K,V>* mmerger = new SortReduceReducer::MergeReducer_MultiTree<K,V>(m_config->update, m_config->temporary_directory, m_maximum_threads, m_config->output_filename);
+					//mmerger->UserAccelerator(false);
+					merger = mmerger;
+
 				}
 			} else if ( cur_thread_count + 2 <= m_maximum_threads ) {
 				//SortReduceReducer::MergeReducer_MultiTree<K,V>* mmerger = new SortReduceReducer::MergeReducer_MultiTree<K,V>(m_config->update, m_config->temporary_directory, m_maximum_threads-cur_thread_count, "");
 				SortReduceReducer::MergeReducer_MultiTree<K,V>* mmerger = new SortReduceReducer::MergeReducer_MultiTree<K,V>(m_config->update, m_config->temporary_directory, (m_maximum_threads-cur_thread_count)>4?4:(m_maximum_threads-cur_thread_count), "");
 				// FIXME This may be suboptimal if multiple manager threads are concurrent
+				//mmerger->UserAccelerator(false);
+				/*
 				if ( mmerger->AcceleratorAvailable() && to_sort > HW_MAXIMUM_SOURCES ) {
 					to_sort = HW_MAXIMUM_SOURCES;
 				} 
-				/*
 				else if ( mmerger->AcceleratorAvailable() && temp_file_count < max_files_per_single_merger ) {
 					// AND NOT LAST MERGE YET
 					to_sort = min_files_per_single_merger;
@@ -410,7 +415,7 @@ SortReduce<K,V>::ManagerThread() {
 			if ( reducer->IsDone() ) {
 				SortReduceTypes::File* reduced_file = reducer->GetOutFile();
 				m_file_priority_queue.push(reduced_file);
-				//printf( "Storage->Storage Pushed sort-reduced file ( size %lu ) -> %lu\n", reduced_file->bytes, m_file_priority_queue.size() ); fflush(stdout);
+				printf( "Storage->Storage Pushed sort-reduced file ( size %lu ) -> %lu\n", reduced_file->bytes, m_file_priority_queue.size() ); fflush(stdout);
 				total_bytes_file_from_storage += reduced_file->bytes;
 
 				mv_stream_mergers_from_storage.erase(mv_stream_mergers_from_storage.begin() + i);
@@ -437,6 +442,8 @@ SortReduce<K,V>::ManagerThread() {
 			int to_sort = (sorted_blocks_cnt > reducer_from_mem_fan_in_max)?reducer_from_mem_fan_in_max:sorted_blocks_cnt; //TODO
 
 			SortReduceReducer::MergeReducer<K,V>* merger = NULL;
+			merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory);
+			/*
 			if ( to_sort == 1 ) {
 				//FIXME just write it to file!
 				merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory);
@@ -447,6 +454,7 @@ SortReduce<K,V>::ManagerThread() {
 				} 
 				merger = mmerger;
 			}
+			*/
 
 			
 			for ( int i = 0; i < to_sort; i++ ) {
@@ -486,6 +494,9 @@ SortReduce<K,V>::ManagerThread() {
 		if ( !m_done_inmem && m_done_input && mp_block_sorter->BlocksInFlight() == 0 
 			&& mv_stream_mergers_from_mem.empty() ) {
 			m_done_inmem = true;
+			AlignedBufferManager* inmem_buffers = AlignedBufferManager::GetInstance(0);
+			inmem_buffers->ClearBuffers();
+
 			printf( "Im-memory sort done!\n" ); fflush(stdout);
 				
 			while ( mp_block_sorter->GetThreadCount() > 0 ) {

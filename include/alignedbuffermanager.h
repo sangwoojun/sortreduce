@@ -23,6 +23,7 @@ public:
 	void ReturnBuffer(SortReduceTypes::Block block);
 
 	int GetFreeCount();
+	void ClearBuffers();
 
 private:
 	static AlignedBufferManager* mp_instance[ALIGNED_INSTANCE_COUNT];
