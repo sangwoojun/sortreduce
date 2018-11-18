@@ -39,7 +39,6 @@ public:
 	int CountFreeBuffers();
 
 	void CheckDone();
-	size_t BytesInFlight() { return m_writing_bytes; };
 private:
 	bool m_verbose;
 	std::mutex m_mutex;
@@ -71,7 +70,6 @@ private:
 
 
 	// Size (in bytes) of buffers waiting to be written to storage
-	size_t m_writing_bytes;
 };
 
 

@@ -243,7 +243,6 @@ TempFileManager::CheckDone() {
 				buffer_manager->ReturnBuffer(arg->block);
 			} else {
 				free(arg->buffer);
-				m_writing_bytes -= arg->bytes;
 			}
 		}
 	}
