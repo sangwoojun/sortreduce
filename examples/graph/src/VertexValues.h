@@ -19,7 +19,9 @@ public:
 	~VertexValues();
 	bool Update(K key, V val);
 	void NextIteration();
+	size_t GetActiveCount() { return m_active_cnt; };
 	//TODO:Mark all vertices
+	int OpenActiveFile(uint32_t iteration);
 private:
 
 	bool (*mp_is_active)(V,V,bool) = NULL;

@@ -14,6 +14,8 @@ template <class K, class V>
 class FileKvReader {
 public:
 	FileKvReader(SortReduceTypes::File* file, SortReduceTypes::Config<K,V>* config);
+	FileKvReader(std::string filename, SortReduceTypes::Config<K,V>* config);
+	FileKvReader(int fd);
 	~FileKvReader();
 
 	void Rewind();
@@ -25,17 +27,18 @@ public:
 private:
 	FileKvReader();
 
-	TempFileManager* mp_temp_file_manager;
-	SortReduceTypes::File* mp_file;
-
-	AlignedBufferManager* mp_buffer_manager = NULL;
-
 	size_t m_offset;
 	size_t m_file_size;
 
-
 	// temp
 	FILE* mp_fp;
+	int m_fd;
+
+	void* mp_read_buffer;
+	size_t m_buffer_offset;
+	size_t m_buffer_bytes;
+	static const size_t m_buffer_alloc_bytes = (1024*1024*4);
+
 };
 }
 

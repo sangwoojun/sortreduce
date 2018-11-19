@@ -99,6 +99,7 @@ VertexValues<K,V>::Update(K key, V val){
 		//TODO buffer for performance
 		write(m_active_vertices_fd, &key, sizeof(K));
 		write(m_active_vertices_fd, &val, sizeof(V));
+		//printf( "Write %x %x\n", key, val );
 		m_active_cnt++;
 
 		//printf( "Active vertex %x, %x\n", key, m_active_cnt );
@@ -106,5 +107,15 @@ VertexValues<K,V>::Update(K key, V val){
 
 	return is_active;
 }
+
+template <class K, class V>
+int 
+VertexValues<K,V>::OpenActiveFile(uint32_t iteration) {
+	char filename[128];
+	sprintf(filename, "%s/vertex_%d.dat", m_temp_directory.c_str(), iteration );
+	int fd = open(filename, O_RDWR|O_CREAT, S_IRUSR|S_IWUSR);
+	return fd;
+}
+
 
 TEMPLATE_EXPLICIT_INSTANTIATION(VertexValues)

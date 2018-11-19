@@ -446,8 +446,14 @@ SortReduce<K,V>::ManagerThread() {
 			
 			int to_sort = (sorted_blocks_cnt > reducer_from_mem_fan_in_max)?reducer_from_mem_fan_in_max:sorted_blocks_cnt; //TODO
 
+			std::string filename = ""; // Temporary file
+			// If single mem->storage file is all, then set name to output_filename
+			if ( m_done_input && m_file_priority_queue.empty() && mv_stream_mergers_from_mem.empty() && sorted_blocks_cnt <= to_sort && mp_block_sorter->BlocksInFlight() == 0 ) {
+				filename = m_config->output_filename;
+				printf( "Writing to file %s\n", filename.c_str() );
+			}
 			SortReduceReducer::MergeReducer<K,V>* merger = NULL;
-			merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory);
+			merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory, filename);
 			/*
 			if ( to_sort == 1 ) {
 				//FIXME just write it to file!
@@ -508,6 +514,9 @@ SortReduce<K,V>::ManagerThread() {
 				mp_block_sorter->KillThread();
 			}
 			//TODO delete mp_block_sorter
+
+			if ( m_file_priority_queue.size() == 1 ) {
+			}
 		}
 
 		if ( !m_done_external && m_done_input && m_done_inmem && !m_reduce_phase &&
