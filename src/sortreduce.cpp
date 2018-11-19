@@ -52,8 +52,13 @@ SortReduce<K,V>::SortReduce(SortReduceTypes::Config<K,V> *config) {
 
 template <class K, class V>
 SortReduce<K,V>::~SortReduce() {
+	manager_thread.join();
+	//printf( "Manager thread joined\n" ); fflush(stdout);
 	delete mq_temp_files;
+	//printf( "mp_temp_files deleted\n" ); fflush(stdout);
 	delete mp_block_sorter;
+	//printf( "mp_block_sorter deleted\n" ); fflush(stdout);
+
 }
 
 template <class K, class V>

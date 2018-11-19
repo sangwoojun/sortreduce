@@ -4,6 +4,7 @@ template <class K, class V>
 VertexValues<K,V>::VertexValues(std::string temp_directory, K key_count, V default_value, bool(*isactive)(V,V,bool)) {
 
 	m_cur_iteration = 0;
+	m_active_cnt = 0;
 
 	mp_is_active = isactive;
 	m_default_value = default_value;
@@ -31,6 +32,12 @@ VertexValues<K,V>::VertexValues(std::string temp_directory, K key_count, V defau
 }
 
 template <class K, class V>
+VertexValues<K,V>::~VertexValues() {
+	if ( m_vertex_data_fd > 0 ) close (m_vertex_data_fd);
+	free(mp_io_buffer);
+}
+
+template <class K, class V>
 void
 VertexValues<K,V>::NextIteration() {
 
@@ -44,6 +51,7 @@ VertexValues<K,V>::NextIteration() {
 	}
 	
 	m_cur_iteration++;
+	m_active_cnt = 0;
 }
 
 template <class K, class V>
@@ -57,7 +65,7 @@ VertexValues<K,V>::Update(K key, V val){
 			write(m_vertex_data_fd, mp_io_buffer, m_io_buffer_bytes);
 			m_io_buffer_bytes = 0;
 
-			printf( "Wrote dirty buffer at %x\n", m_io_buffer_offset );
+			//printf( "Wrote dirty buffer at %x\n", m_io_buffer_offset );
 		} 
 		size_t byte_offset_aligned = byte_offset&(~0x3ff); // 1 KB alignment
 		pread(m_vertex_data_fd, mp_io_buffer, m_io_buffer_alloc_size, byte_offset_aligned);
@@ -65,7 +73,7 @@ VertexValues<K,V>::Update(K key, V val){
 		m_io_buffer_bytes = m_io_buffer_alloc_size;
 		m_io_buffer_dirty = false;
 
-		printf( "Read new buffer at %x\n", byte_offset_aligned );
+		//printf( "Read new buffer at %x\n", byte_offset_aligned );
 	}
 
 	size_t internal_offset = byte_offset - m_io_buffer_offset;
@@ -88,9 +96,12 @@ VertexValues<K,V>::Update(K key, V val){
 			lseek(m_active_vertices_fd, 0, SEEK_SET);
 		}
 
+		//TODO buffer for performance
 		write(m_active_vertices_fd, &key, sizeof(K));
+		write(m_active_vertices_fd, &val, sizeof(V));
+		m_active_cnt++;
 
-		printf( "Active vertex %x\n", key );
+		//printf( "Active vertex %x, %x\n", key, m_active_cnt );
 	}
 
 	return is_active;

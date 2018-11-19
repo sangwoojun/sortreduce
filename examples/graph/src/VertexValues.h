@@ -16,6 +16,7 @@ template <class K, class V>
 class VertexValues {
 public:
 	VertexValues(std::string temp_directory, K key_count, V default_value,bool(*isactive)(V,V,bool));
+	~VertexValues();
 	bool Update(K key, V val);
 	void NextIteration();
 	//TODO:Mark all vertices
@@ -42,6 +43,7 @@ private:
 	int m_active_vertices_fd;
 
 	uint32_t m_cur_iteration = 0;
+	size_t m_active_cnt = 0;
 
 };
 

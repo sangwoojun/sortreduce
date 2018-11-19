@@ -4,21 +4,23 @@
 #include <chrono>
 #include <ctime>
 #include <map>
+#include <tuple>
 
 #include "sortreduce.h"
 #include "types.h"
 
+#include "EdgeProcess.h"
 #include "VertexValues.h"
 
-uint32_t vertex_update(uint32_t a, uint32_t b) {
+inline uint32_t vertex_update(uint32_t a, uint32_t b) {
 	uint32_t ret = a+b;
 	return ret;
 }
-uint32_t edge_program(uint32_t vertex, uint32_t edge) {
-	return vertex;
+inline uint32_t edge_program(uint32_t vid, uint32_t value, uint32_t fanout) {
+	return vid;
 }
 
-bool is_active(uint32_t old, uint32_t newv, bool marked) {
+inline bool is_active(uint32_t old, uint32_t newv, bool marked) {
 	//printf( "Comparing %lx %lx %s\n", old, newv, marked?"Y":"N" );
 	if ( old != 0xffffffff ) return false;
 	return true;
@@ -28,21 +30,67 @@ int main(int argc, char** argv) {
 	srand(time(0));
 
 	if ( argc < 3 ) {
-		fprintf(stderr, "usage: %s directory element_count\n", argv[0] );
+		fprintf(stderr, "usage: %s ridx matrix directory \n", argv[0] );
 		exit(1);
 	}
 
 	char* tmp_dir = argv[1];
-	uint64_t element_count = strtoull(argv[2], NULL, 10);
+	char* idx_path = argv[2];
+	char* mat_path = argv[3];
+
+
+	SortReduceTypes::Config<uint32_t,uint32_t>* conf =
+		new SortReduceTypes::Config<uint32_t,uint32_t>(tmp_dir, "", 8);
+	conf->SetUpdateFunction(&vertex_update);
+	conf->SetManagedBufferSize(1024*1024*8, 256); // 4 GiB
+
+	SortReduce<uint32_t,uint32_t>* sr = new SortReduce<uint32_t,uint32_t>(conf);
+	SortReduce<uint32_t,uint32_t>::IoEndpoint* ep = sr->GetEndpoint(true);
+
+
 
 
 	VertexValues<uint32_t,uint32_t>* vertex_values = new VertexValues<uint32_t,uint32_t>(tmp_dir, 1024*1024*32, 0xffffffff, &is_active);
-	for ( int i = 0; i < element_count; i++ ) {
+	EdgeProcess<uint32_t,uint32_t>* edge_process = new EdgeProcess<uint32_t,uint32_t>(idx_path, mat_path, &edge_program, ep);
+	for ( int i = 0; i < 1024; i++ ) {
+		edge_process->SourceVertex(i,9);
+	}
+	ep->Finish();
+	sr->Finish();
+	printf( "Input done\n" );
+
+	SortReduceTypes::Status status = sr->CheckStatus();
+	while ( status.done_external == false ) {
+		sleep(1);
+		status = sr->CheckStatus();
+		printf( "%s %s:%d-%d %s:%d-%d\n",
+			status.done_input ? "yes":"no",
+			status.done_inmem ? "yes":"no",
+			status.internal_count, status.sorted_count,
+			status.done_external ? "yes":"no",
+			status.external_count, status.file_count);
+		fflush(stdout);
+	}
+
+	printf( "Done?\n" );
+	std::tuple<uint32_t,uint32_t,bool> res = sr->Next();
+	while ( std::get<2>(res) ) {
+		uint32_t key = std::get<0>(res);
+		uint32_t val = std::get<1>(res);
+		vertex_values->Update(key,val);
+		res = sr->Next();
+	}
+
+	exit(0);
+
+	uint64_t element_count = 1024;
+
+	for ( uint64_t i = 0; i < element_count; i++ ) {
 		vertex_values->Update(i*7, i);
 	}
 	vertex_values->NextIteration();
 	printf( "Next\n" );
-	for ( int i = 0; i < element_count; i++ ) {
+	for ( uint64_t i = 0; i < element_count; i++ ) {
 		vertex_values->Update(i*17, i);
 	}
 
@@ -50,6 +98,7 @@ int main(int argc, char** argv) {
 	printf( "Done?\n" );
 	exit(0);
 
+/*
 	SortReduceTypes::Config<uint64_t,uint32_t>* conf =
 		new SortReduceTypes::Config<uint64_t,uint32_t>(tmp_dir, "out.sr", 8);
 	conf->SetUpdateFunction(&vertex_update);
@@ -152,4 +201,5 @@ int main(int argc, char** argv) {
 		std::cout << "ERROR: inserted " << element_count
 							<< ", but the total sum is only " << total_sum << "\n";
 	}
+	*/
 }
