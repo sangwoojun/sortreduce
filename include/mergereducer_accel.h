@@ -20,9 +20,6 @@
 #include "bdbmpcie.h"
 #endif // HW_ACCEL
 
-/**
-TODO: only allow ONE instance
-**/
 
 namespace SortReduceReducer {
 	template <class K, class V>

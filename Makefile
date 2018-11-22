@@ -32,4 +32,4 @@ $(OUTPUTDIR):
 	mkdir -p $(OUTPUTDIR)
 
 clean:
-	rm -r $(OUTPUTDIR)
+	rm -rf $(OUTPUTDIR)

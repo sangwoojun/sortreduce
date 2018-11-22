@@ -102,6 +102,8 @@ namespace SortReduceTypes {
 		size_t max_bytes_inflight;
 
 		size_t max_storage_allocatd_bytes = 0;
+
+		bool quiet;
 	};
 
 	template <class K, class V>

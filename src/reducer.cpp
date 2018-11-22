@@ -1026,7 +1026,7 @@ template <class K, class V>
 void
 SortReduceReducer::MergerNode<K,V>::WorkerThread2() {
 	uint32_t rid = rand();
-	printf( "MergerNode WorkerThread2 started! %x\n", rid ); fflush(stdout);
+	//printf( "MergerNode WorkerThread2 started! %x\n", rid ); fflush(stdout);
 
 
 	BlockKvReader<K,V>* readers[2];
@@ -1099,7 +1099,7 @@ void
 SortReduceReducer::MergerNode<K,V>::WorkerThreadN() {
 	int source_count = ma_sources.size();
 	
-	printf( "MergerNode WorkerThreadN started with %d sources!\n", source_count ); fflush(stdout);
+	//printf( "MergerNode WorkerThreadN started with %d sources!\n", source_count ); fflush(stdout);
 
 	std::priority_queue<SortReduceTypes::KvPairSrc<K,V>,std::vector<SortReduceTypes::KvPairSrc<K,V> >, CompareKv> priority_queue;
 
@@ -1188,11 +1188,11 @@ SortReduceReducer::MergerNode<K,V>::WorkerThreadN() {
 		this->EmitKvPair(last_kvp.key, last_kvp.val);
 	}
 	
-	printf( "MergerNodeN flushing emit!\n" ); fflush(stdout);
+	//printf( "MergerNodeN flushing emit!\n" ); fflush(stdout);
 
 	this->FinishEmit();
 	
-	printf( "MergerNodeN end reached!\n" ); fflush(stdout);
+	//printf( "MergerNodeN end reached!\n" ); fflush(stdout);
 	
 	for ( int i = 0; i < source_count; i++ ) {
 		delete readers[i];
@@ -1457,7 +1457,7 @@ void
 SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::Start() {
 	this->m_started = true;
 
-	printf( "StreamMergeReducer_SinglePriority started with %lu inputs\n", this->mv_input_sources.size() ); fflush(stdout);
+	//printf( "StreamMergeReducer_SinglePriority started with %lu inputs\n", this->mv_input_sources.size() ); fflush(stdout);
 
 	m_worker_thread = std::thread(&StreamMergeReducer_SinglePriority<K,V>::WorkerThread,this);
 }
@@ -1647,7 +1647,7 @@ SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::WorkerThread() {
 	now = std::chrono::high_resolution_clock::now();
 	duration_milli = std::chrono::duration_cast<std::chrono::milliseconds> (now-last_time);
 
-	printf( "StreamMergeReducer_SinglePriority %d elapsed: %lu ms\n", source_count, duration_milli.count() );
+	//printf( "StreamMergeReducer_SinglePriority %d elapsed: %lu ms\n", source_count, duration_milli.count() );
 }
 
 

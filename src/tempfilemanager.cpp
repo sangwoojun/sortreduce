@@ -47,10 +47,10 @@ TempFileManager::CreateEmptyFile(std::string filename) {
 	if ( filename == "" ) {
 		sprintf(tmp_filename, "%s/tmp_%09u.bin", m_base_path.c_str(), ms_filename_idx);
 		ms_filename_idx++;
-		fd = open(tmp_filename, O_RDWR|O_DIRECT|O_CREAT, S_IRUSR|S_IWUSR);
+		fd = open(tmp_filename, O_RDWR|O_DIRECT|O_CREAT|O_TRUNC, S_IRUSR|S_IWUSR);
 	} else {
 		sprintf(tmp_filename, "%s/%s", m_base_path.c_str(), filename.c_str());
-		fd = open(tmp_filename, O_RDWR|O_DIRECT|O_CREAT, S_IRUSR|S_IWUSR);
+		fd = open(tmp_filename, O_RDWR|O_DIRECT|O_CREAT|O_TRUNC, S_IRUSR|S_IWUSR);
 	}
 	
 	m_mutex.unlock();

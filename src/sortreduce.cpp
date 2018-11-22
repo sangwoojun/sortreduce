@@ -24,7 +24,7 @@ SortReduce<K,V>::SortReduce(SortReduceTypes::Config<K,V> *config) {
 	this->m_cur_update_block.bytes = 0;
 
 	printf( "SortReduce Starting...\n" );
-	printf( "Remember to set per-thread open file limit to be larger at /etc/security/limits.conf\n" );
+	if ( !config->quiet ) printf( "Remember to set per-thread open file limit to be larger at /etc/security/limits.conf\n" );
 	
 	//Buffers for in-memory sorting
 	AlignedBufferManager* managed_buffers = AlignedBufferManager::GetInstance(0);
@@ -32,7 +32,7 @@ SortReduce<K,V>::SortReduce(SortReduceTypes::Config<K,V> *config) {
 
 	//Buffers for file I/O
 	AlignedBufferManager* buffer_manager_io = AlignedBufferManager::GetInstance(1);
-	buffer_manager_io->Init(1024*1024*2, 1024*128); //FIXME set to maximum of ... very large GBs. 
+	buffer_manager_io->Init(1024*1024*2, 1024*64); //FIXME set to maximum of ... very large GBs. 
 
 	this->m_config = config;
 	if ( config->update == NULL ) {
@@ -215,8 +215,8 @@ void
 SortReduce<K,V>::ManagerThread() {
 	//printf( "maximum threads: %d\n", config->maximum_threads );
 
-	const size_t reducer_from_mem_fan_in = 128;
-	const size_t reducer_from_mem_fan_in_max = 256;
+	const size_t reducer_from_mem_fan_in = 64;
+	const size_t reducer_from_mem_fan_in_max = 128;
 	const size_t reducer_from_storage_fan_in_max = 32;
 	int reducer_from_mem_max_count = 1;
 	
@@ -280,7 +280,7 @@ SortReduce<K,V>::ManagerThread() {
 					} else {
 						if ( reducer_from_mem_max_count > 1 ) {
 							reducer_from_mem_max_count --;
-							printf( "reducer_from_mem_max_count %d\n", reducer_from_mem_max_count ); fflush(stdout);
+							if ( !m_config->quiet ) printf( "reducer_from_mem_max_count %d\n", reducer_from_mem_max_count );
 						} else {
 							//printf( "No more reducers to kill\n" );
 						}
@@ -292,7 +292,7 @@ SortReduce<K,V>::ManagerThread() {
 					
 					if ( threads_available > 0 ) {
 						reducer_from_mem_max_count ++;
-						printf( "reducer_from_mem_max_count %d << %d\n", reducer_from_mem_max_count, threads_available ); fflush(stdout);
+						if ( !m_config->quiet ) printf( "reducer_from_mem_max_count %d << %d\n", reducer_from_mem_max_count, threads_available );
 					} else if ( reducer_from_mem_fan_in_max * reducer_from_mem_max_count + block_sorter_thread_count < (size_t)m_config->buffer_count ) {
 						// delete sorter thread
 						// reducer_from_mem_max_count can be increased next
@@ -319,7 +319,7 @@ SortReduce<K,V>::ManagerThread() {
 				required_space_safe = cur_storage_total_bytes;
 			}
 			if ( !m_done_inmem && max_storage_bytes - cur_storage_total_bytes < required_space_safe ) {
-				printf( "SortReduce entering reduce phase due to lack of storage %lu\n", max_storage_bytes - cur_storage_total_bytes );
+				if ( !m_config->quiet ) printf( "SortReduce entering reduce phase due to lack of storage %lu\n", max_storage_bytes - cur_storage_total_bytes );
 				m_reduce_phase = true;
 				while ( mp_block_sorter->GetThreadCount() > 0 ) {
 					mp_block_sorter->KillThread();
@@ -390,7 +390,7 @@ SortReduce<K,V>::ManagerThread() {
 				// Invisible temporary file
 				merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory);
 			}
-			printf( "Want to start storage-storage merge with %d inputs out of %ld %s\n", to_sort, temp_file_count, last_merge?"last":"not last" );
+			if ( !m_config->quiet ) printf( "Want to start storage-storage merge with %d inputs out of %ld %s\n", to_sort, temp_file_count, last_merge?"last":"not last" );
 
 			//size_t last_bytes = 0;
 			for ( int i = 0; i < to_sort; i++ ) {
@@ -420,7 +420,7 @@ SortReduce<K,V>::ManagerThread() {
 			if ( reducer->IsDone() ) {
 				SortReduceTypes::File* reduced_file = reducer->GetOutFile();
 				m_file_priority_queue.push(reduced_file);
-				printf( "Storage->Storage Pushed sort-reduced file ( size %lu ) -> %lu\n", reduced_file->bytes, m_file_priority_queue.size() ); fflush(stdout);
+				if ( !m_config->quiet ) printf( "Storage->Storage Pushed sort-reduced file ( size %lu ) -> %lu\n", reduced_file->bytes, m_file_priority_queue.size() );
 				total_bytes_file_from_storage += reduced_file->bytes;
 
 				mv_stream_mergers_from_storage.erase(mv_stream_mergers_from_storage.begin() + i);
@@ -432,7 +432,7 @@ SortReduce<K,V>::ManagerThread() {
 
 				if ( m_reduce_phase && mv_stream_mergers_from_storage.empty() ) {
 					m_reduce_phase = false;
-					printf( "SortReduce exiting reduce phase %lu\n", max_storage_bytes - cur_storage_total_bytes );
+					if ( !m_config->quiet ) printf( "SortReduce exiting reduce phase %lu\n", max_storage_bytes - cur_storage_total_bytes );
 				}
 
 			} else {
@@ -448,9 +448,9 @@ SortReduce<K,V>::ManagerThread() {
 
 			std::string filename = ""; // Temporary file
 			// If single mem->storage file is all, then set name to output_filename
-			if ( m_done_input && m_file_priority_queue.empty() && mv_stream_mergers_from_mem.empty() && sorted_blocks_cnt <= to_sort && mp_block_sorter->BlocksInFlight() == 0 ) {
+			if ( m_done_input && m_file_priority_queue.empty() && mv_stream_mergers_from_mem.empty() && sorted_blocks_cnt <= to_sort  ) {
 				filename = m_config->output_filename;
-				printf( "Writing to file %s\n", filename.c_str() );
+				if ( !m_config->quiet ) printf( "SortReduce writing inmem directly to file %s\n", filename.c_str() );
 			}
 			SortReduceReducer::MergeReducer<K,V>* merger = NULL;
 			merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory, filename);
@@ -467,7 +467,7 @@ SortReduce<K,V>::ManagerThread() {
 			}
 			*/
 
-			
+
 			for ( int i = 0; i < to_sort; i++ ) {
 				SortReduceTypes::Block block = mp_block_sorter->GetOutBlock();
 				block.last = true;
@@ -489,7 +489,7 @@ SortReduce<K,V>::ManagerThread() {
 
 				//size_t fsize = lseek(reduced_file->fd, 0, SEEK_END);
 				//printf( "File size %lx %lx\n", fsize, reduced_file->bytes );
-				printf( "Pushed sort-reduced file ( size %lu ) -> %lu\n", reduced_file->bytes, m_file_priority_queue.size() ); fflush(stdout);
+				if ( !m_config->quiet ) printf( "Pushed sort-reduced file ( size %lu ) -> %lu\n", reduced_file->bytes, m_file_priority_queue.size() );
 				//printf( "from_mem erased %d\n", mv_stream_mergers_from_mem.size() );
 				fflush(stdout);
 
@@ -508,7 +508,7 @@ SortReduce<K,V>::ManagerThread() {
 			AlignedBufferManager* inmem_buffers = AlignedBufferManager::GetInstance(0);
 			inmem_buffers->ClearBuffers();
 
-			printf( "Im-memory sort done!\n" ); fflush(stdout);
+			if ( !m_config->quiet ) printf( "Im-memory sort done!\n" );
 				
 			while ( mp_block_sorter->GetThreadCount() > 0 ) {
 				mp_block_sorter->KillThread();
@@ -535,10 +535,12 @@ SortReduce<K,V>::ManagerThread() {
 			mp_output_file = m_file_priority_queue.top();
 			m_done_external = true;
 
-			printf( "Sort-reduce all done! Processed %lu blocks\n", total_blocks_sorted); 
-			printf( "Wrote %lu bytes to storage during inmem phase\n", total_bytes_file_from_mem );
-			printf( "Wrote %lu bytes to storage during storage phase\n", total_bytes_file_from_storage );
-			fflush(stdout);
+			if ( !m_config->quiet ) {
+				printf( "Sort-reduce all done! Processed %lu blocks\n", total_blocks_sorted); 
+				printf( "Wrote %lu bytes to storage during inmem phase\n", total_bytes_file_from_mem );
+				printf( "Wrote %lu bytes to storage during storage phase\n", total_bytes_file_from_storage );
+				fflush(stdout);
+			}
 			break;
 		}
 
