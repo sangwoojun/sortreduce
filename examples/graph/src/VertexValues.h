@@ -47,7 +47,7 @@ private:
 	size_t m_io_buffer_offset = 0;
 	size_t m_io_buffer_bytes = 0;
 	bool m_io_buffer_dirty = false;
-	static const size_t m_io_buffer_alloc_items = 1024*32;
+	static const size_t m_io_buffer_alloc_items = 1024*8;
 	static const size_t m_io_buffer_alloc_size = (m_io_buffer_alloc_items*sizeof(ValueItem));
 	
 	std::string m_temp_directory;
