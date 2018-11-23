@@ -4,14 +4,15 @@ template <class K, class V>
 SortReduceUtils::FileKvReader<K,V>::FileKvReader(SortReduceTypes::File* file, SortReduceTypes::Config<K,V>* config) {
 	this->m_offset = 0;
 	this->m_file_size = file->bytes;
-	printf( "Loading file %s size %lu\n", config->output_filename.c_str(), m_file_size ); fflush(stdout);
 
 	// temp
 	this->m_fd = open((config->temporary_directory+"/"+config->output_filename).c_str(), O_RDONLY, S_IRUSR|S_IWUSR);
+	printf( "Loading file %s size %lu -- %d\n", config->output_filename.c_str(), m_file_size, m_fd ); fflush(stdout);
 
 	m_buffer_offset = 0;
 	m_buffer_bytes = 0;
 	mp_read_buffer = malloc(m_buffer_alloc_bytes);
+	m_last_key = 0;
 }
 template <class K, class V>
 SortReduceUtils::FileKvReader<K,V>::FileKvReader(std::string filename, SortReduceTypes::Config<K,V>* config) {
@@ -23,19 +24,20 @@ SortReduceUtils::FileKvReader<K,V>::FileKvReader(std::string filename, SortReduc
 	m_buffer_offset = 0;
 	m_buffer_bytes = 0;
 	mp_read_buffer = malloc(m_buffer_alloc_bytes);
+	m_last_key = 0;
 }
 
 template <class K, class V>
 SortReduceUtils::FileKvReader<K,V>::FileKvReader(int fd) {
 	this->m_offset = 0;
 	this->m_fd = fd;
-	//this->m_fd = open((config->temporary_directory+"/"+filename).c_str(), O_RDONLY, S_IRUSR|S_IWUSR);
 	this->m_file_size = lseek(m_fd, 0, SEEK_END);
 	printf( "Loading file fd %d size %lu\n", fd,  m_file_size ); fflush(stdout);
 	
 	m_buffer_offset = 0;
 	m_buffer_bytes = 0;
 	mp_read_buffer = malloc(m_buffer_alloc_bytes);
+	m_last_key = 0;
 }
 
 
@@ -73,6 +75,13 @@ SortReduceUtils::FileKvReader<K,V>::Next() {
 	K key = *((K*)(((uint8_t*)mp_read_buffer)+internal_offset));
 	V val = *((V*)(((uint8_t*)mp_read_buffer)+internal_offset+sizeof(K)));
 	m_offset += sizeof(K)+sizeof(V);
+
+/*
+	if ( key < m_last_key ) {
+		printf( "FileKvReader order wrong %lx %lx\n", m_last_key, key );
+	}
+	m_last_key = key;
+*/
 	
 	return std::make_tuple(key,val,true);
 

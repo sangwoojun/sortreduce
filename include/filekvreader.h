@@ -10,36 +10,38 @@
 
 namespace SortReduceUtils {
 
-template <class K, class V>
-class FileKvReader {
-public:
-	FileKvReader(SortReduceTypes::File* file, SortReduceTypes::Config<K,V>* config);
-	FileKvReader(std::string filename, SortReduceTypes::Config<K,V>* config);
-	FileKvReader(int fd);
-	~FileKvReader();
+	template <class K, class V>
+	class FileKvReader {
+	public:
+		FileKvReader(SortReduceTypes::File* file, SortReduceTypes::Config<K,V>* config);
+		FileKvReader(std::string filename, SortReduceTypes::Config<K,V>* config);
+		FileKvReader(int fd);
+		~FileKvReader();
 
-	void Rewind();
-	void Seek(size_t idx);
-	std::tuple<K,V, bool> Next();
+		void Rewind();
+		void Seek(size_t idx);
+		std::tuple<K,V, bool> Next();
 
-	typedef struct __attribute__ ((__packed__)) {K key; V val;} KvPair;
+		typedef struct __attribute__ ((__packed__)) {K key; V val;} KvPair;
 
-private:
-	FileKvReader();
+	private:
+		FileKvReader();
 
-	size_t m_offset;
-	size_t m_file_size;
+		size_t m_offset;
+		size_t m_file_size;
 
-	// temp
-	FILE* mp_fp;
-	int m_fd;
+		// temp
+		FILE* mp_fp;
+		int m_fd;
 
-	void* mp_read_buffer;
-	size_t m_buffer_offset;
-	size_t m_buffer_bytes;
-	static const size_t m_buffer_alloc_bytes = (1024*1024*4);
+		void* mp_read_buffer;
+		size_t m_buffer_offset;
+		size_t m_buffer_bytes;
+		static const size_t m_buffer_alloc_bytes = (1024*1024*4);
 
-};
+		K m_last_key;
+
+	};
 }
 
 

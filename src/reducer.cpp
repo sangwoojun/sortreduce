@@ -80,9 +80,11 @@ template <class K, class V>
 SortReduceReducer::StreamFileWriterNode<K,V>::StreamFileWriterNode(std::string temp_directory, std::string filename) {
 	this->m_out_offset = 0;
 	this->m_out_file_offset = 0;
+	this->m_last_key = 0;
 	this->mp_buffer_manager = AlignedBufferManager::GetInstance(1);
 	this->mp_temp_file_manager = new TempFileManager(temp_directory);
 	this->m_out_file = this->mp_temp_file_manager->CreateEmptyFile(filename);
+	//printf( "%s %d \n", m_out_file->path.c_str(), m_out_file->fd );
 	
 	m_out_block = mp_buffer_manager->GetBuffer();
 	while (!m_out_block.valid) {
@@ -101,6 +103,13 @@ template <class K, class V>
 inline void
 SortReduceReducer::StreamFileWriterNode<K,V>::EmitKv(K key, V val) {
 	const size_t kv_bytes = sizeof(K)+sizeof(V);
+
+/*
+	if ( key < m_last_key ) {
+		printf( "StreamFileWriterNode key order wrong %lx %lx\n", m_last_key, key );
+	}
+	m_last_key = key;
+*/
 
 	if ( m_out_offset + kv_bytes <= m_out_block.bytes ) {
 		ReducerUtils<K,V>::EncodeKvp(m_out_block.buffer, m_out_offset, key, val);
@@ -1274,7 +1283,7 @@ SortReduceReducer::ReducerNode<K,V>::WorkerThread() {
 	mp_src->ReturnBlock(in_block);
 	this->EmitFlush();
 
-	printf( "ReducerNode read %ld emitted %ld\n", rcnt, cnt );
+	//printf( "ReducerNode read %ld emitted %ld\n", rcnt, cnt );
 
 	m_done = true;
 }

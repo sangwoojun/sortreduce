@@ -103,7 +103,7 @@ SortReduceReducer::MergeReducer_MultiTree<K,V>::Start() {
 
 
 
-	printf( "MergeReducer_MultiTree started with %lu files and %d threads\n", input_count, m_maximum_threads ); fflush(stdout);
+	//printf( "MergeReducer_MultiTree started with %lu files and %d threads -> %s\n", input_count, m_maximum_threads, m_filename.c_str() ); fflush(stdout);
 
 
 	int cur_level = 0;

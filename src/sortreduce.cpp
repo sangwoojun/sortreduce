@@ -448,7 +448,7 @@ SortReduce<K,V>::ManagerThread() {
 
 			std::string filename = ""; // Temporary file
 			// If single mem->storage file is all, then set name to output_filename
-			if ( m_done_input && m_file_priority_queue.empty() && mv_stream_mergers_from_mem.empty() && sorted_blocks_cnt <= to_sort  ) {
+			if ( m_done_input && m_file_priority_queue.empty() && mv_stream_mergers_from_mem.empty() && mp_block_sorter->BlocksInFlight() <= to_sort  ) {
 				filename = m_config->output_filename;
 				if ( !m_config->quiet ) printf( "SortReduce writing inmem directly to file %s\n", filename.c_str() );
 			}

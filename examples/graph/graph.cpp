@@ -30,8 +30,9 @@ inline uint32_t finalize_program(uint32_t val) {
 
 inline bool is_active(uint32_t old, uint32_t newv, bool marked) {
 	//printf( "Comparing %lx %lx %s\n", old, newv, marked?"Y":"N" );
-	if ( old != 0xffffffff ) return false;
-	return true;
+	if ( old == 0xffffffff ) return true;
+	//printf( "Comparing %x %x %s\n", old, newv, marked?"Y":"N" );
+	return false;
 }
 
 int main(int argc, char** argv) {
@@ -51,11 +52,6 @@ int main(int argc, char** argv) {
 	std::chrono::high_resolution_clock::time_point now;
 	std::chrono::milliseconds duration_milli;
 
-
-	SortReduceTypes::Config<uint32_t,uint32_t>* conf =
-		new SortReduceTypes::Config<uint32_t,uint32_t>(tmp_dir, "out.sr", 8);
-	conf->quiet = true;
-	conf->SetUpdateFunction(&vertex_update);
 	//conf->SetManagedBufferSize(1024*1024*4, 256); // 4 GiB
 
 
@@ -66,6 +62,14 @@ int main(int argc, char** argv) {
 
 	int iteration = 0;
 	while ( true ) {
+		char filename[128];
+		sprintf(filename, "out%04d.sr", iteration);
+
+		SortReduceTypes::Config<uint32_t,uint32_t>* conf =
+			new SortReduceTypes::Config<uint32_t,uint32_t>(tmp_dir, filename, 8);
+		conf->quiet = true;
+		conf->SetUpdateFunction(&vertex_update);
+
 		SortReduce<uint32_t,uint32_t>* sr = new SortReduce<uint32_t,uint32_t>(conf);
 		SortReduce<uint32_t,uint32_t>::IoEndpoint* ep = sr->GetEndpoint(true);
 		edge_process->SetSortReduceEndpoint(ep);

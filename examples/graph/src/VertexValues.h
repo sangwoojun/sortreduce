@@ -47,7 +47,7 @@ private:
 	size_t m_io_buffer_offset = 0;
 	size_t m_io_buffer_bytes = 0;
 	bool m_io_buffer_dirty = false;
-	static const size_t m_io_buffer_alloc_items = 1024*8;
+	static const size_t m_io_buffer_alloc_items = 1024*2;
 	static const size_t m_io_buffer_alloc_size = (m_io_buffer_alloc_items*sizeof(ValueItem));
 	
 	std::string m_temp_directory;
@@ -56,6 +56,7 @@ private:
 
 	uint32_t m_cur_iteration = 0;
 	size_t m_active_cnt = 0;
+	size_t m_iteration_element_cnt = 0;
 	size_t ma_active_count[MAX_VERTEXVAL_THREADS];
 	
 private:
@@ -81,6 +82,12 @@ private:
 		K key;
 		V val;
 	} KvPair;
+
+
+	K m_last_key;
+	K m_last_out_key;
+	size_t m_kv_cnt;
+	int print_cnt;
 
 };
 

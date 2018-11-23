@@ -10,6 +10,7 @@ VertexValues<K,V>::VertexValues(std::string temp_directory, K key_count, V defau
 
 	m_cur_iteration = 0;
 	m_active_cnt = 0;
+	m_iteration_element_cnt = 0;
 	m_max_thread_count = thread_count;
 	m_cur_thread_count = 0;
 	m_kill_threads = false;
@@ -24,17 +25,19 @@ VertexValues<K,V>::VertexValues(std::string temp_directory, K key_count, V defau
 	m_temp_directory = temp_directory;
 	sprintf(tmp_filename, "%s/vertex_data.dat", temp_directory.c_str() );
 	m_vertex_data_fd = open(tmp_filename, O_RDWR|O_CREAT, S_IRUSR|S_IWUSR);
-	ValueItem defaultv[1024];
+	ValueItem* defaultv = (ValueItem*)malloc(sizeof(ValueItem)*1024);
 	for ( int i = 0; i < 1024; i++ ) {
 		defaultv[i].iteration = 0;
 		defaultv[i].val = default_value;
 	}
 	K cnt = 0;
 	while (cnt < key_count) {
-		write(m_vertex_data_fd, defaultv, sizeof(defaultv));
+		write(m_vertex_data_fd, defaultv, sizeof(ValueItem)*1024);
 		cnt += 1024;
 	}
-	printf( "Created vertex values file at %s -- %s\n", tmp_filename, temp_directory.c_str() ); 
+	free(defaultv);
+
+	printf( "Created vertex values file at %s -- %ld\n", tmp_filename, (uint64_t)key_count ); 
 	fflush(stdout);
 
 	mp_io_buffer = malloc(m_io_buffer_alloc_size);
@@ -86,6 +89,13 @@ VertexValues<K,V>::Start() {
 		ma_worker_thread[i] = std::thread(&VertexValues<K,V>::WorkerThread, this, i);
 	}
 	m_cur_thread_count = m_max_thread_count;
+
+	m_active_buffer_idx = 0;
+
+	m_last_key = 0;
+	m_last_out_key = 0;
+	m_kv_cnt = 0;
+	print_cnt = 0;
 }
 
 template <class K, class V>
@@ -122,8 +132,10 @@ VertexValues<K,V>::NextIteration() {
 		//unlink(filename);
 	}
 	
+	printf( "\t\t++ Iteration %d done: %ld/%ld\n", m_cur_iteration, m_active_cnt, m_iteration_element_cnt );
 	m_cur_iteration++;
 	m_active_cnt = 0;
+	m_iteration_element_cnt = 0;
 }
 
 template <class K, class V>
@@ -140,10 +152,22 @@ VertexValues<K,V>::GetActiveCount(){
 template <class K, class V>
 inline bool
 VertexValues<K,V>::Update(K key, V val){
+	if ( key < m_last_key ) {
+		printf( "VertexValues::Update key order wrong %lx %x %x %lx\n", m_kv_cnt, m_last_key, key, val );
+		print_cnt = 10;
+	} else if ( key == 0 || print_cnt > 0 ) {
+		printf( "VertexValues::Update key %x %x %x\n", m_kv_cnt, key, val );
+		print_cnt--;
+	}
+	m_last_key = key;
+	m_kv_cnt++;
+
 	size_t buffer_offset = key/m_io_buffer_alloc_items;
+	/*
 	size_t thread_idx = buffer_offset % (m_cur_thread_count+1);
 	if ( thread_idx > 0 ) {
 		thread_idx--; // 0 is current thread
+		printf("ERROR this should not happen\n");
 
 		//send it to ...
 		if ( ma_cur_out_block[thread_idx].valid == false ) {
@@ -167,7 +191,7 @@ VertexValues<K,V>::Update(K key, V val){
 		return true;
 	} 
 
-
+*/
 	size_t byte_offset = sizeof(ValueItem)*((size_t)key);
 	if ( byte_offset < m_io_buffer_offset || byte_offset+sizeof(ValueItem) > m_io_buffer_offset+m_io_buffer_bytes ) {
 
@@ -179,11 +203,13 @@ VertexValues<K,V>::Update(K key, V val){
 
 			//printf( "Wrote dirty buffer at %x\n", m_io_buffer_offset );
 		} 
+		
 		if ( m_active_buffer_idx > 0 ) {
 			write(m_active_vertices_fd, mp_active_buffer, m_active_buffer_idx*sizeof(KvPair));
 			m_active_buffer_idx = 0;
 		}
-		size_t offset_aligned = (byte_offset/m_io_buffer_alloc_size)*m_io_buffer_alloc_size;
+		
+		size_t offset_aligned = byte_offset-(byte_offset%m_io_buffer_alloc_size);
 		pread(m_vertex_data_fd, mp_io_buffer, m_io_buffer_alloc_size, offset_aligned);
 		m_io_buffer_offset = offset_aligned;
 		m_io_buffer_bytes = m_io_buffer_alloc_size;
@@ -197,6 +223,7 @@ VertexValues<K,V>::Update(K key, V val){
 	ValueItem vi = *pvi;
 	bool is_marked = (vi.iteration == m_cur_iteration);
 	bool is_active = mp_is_active(vi.val, val, is_marked);
+
 
 	if ( is_active ) {
 		vi.val = val;
@@ -219,15 +246,20 @@ VertexValues<K,V>::Update(K key, V val){
 		//write(m_active_vertices_fd, &key, sizeof(K));
 		//write(m_active_vertices_fd, &val, sizeof(V));
 		//printf( "Write %x %x\n", key, val );
+		
 		KvPair wkvp;
 		wkvp.key = key;
 		wkvp.val = val;
 		KvPair* active_buffer = (KvPair*)mp_active_buffer;
-		active_buffer[m_active_buffer_idx++] = wkvp;
+		active_buffer[m_active_buffer_idx] = wkvp;
+		m_active_buffer_idx++;
+		
 		m_active_cnt++;
+
 
 		//printf( "Active vertex %x, %x\n", key, m_active_cnt );
 	}
+	m_iteration_element_cnt++;
 
 	return true;
 }

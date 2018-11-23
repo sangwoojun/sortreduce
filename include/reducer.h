@@ -90,6 +90,8 @@ namespace SortReduceReducer {
 		size_t m_out_offset;
 		size_t m_out_file_offset;
 
+		K m_last_key;
+
 		//std::string ms_temp_directory;
 		AlignedBufferManager* mp_buffer_manager;
 		TempFileManager* mp_temp_file_manager;
