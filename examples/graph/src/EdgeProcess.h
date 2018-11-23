@@ -7,11 +7,14 @@
 #include <string.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <libaio.h>
 
 #include <errno.h>
 
 #include <string>
 #include <thread>
+#include <queue>
+#include <atomic>
 
 #include "types.h"
 #include "utils.h"
@@ -43,7 +46,7 @@ private:
 	size_t m_edge_buffer_offset;
 	size_t m_edge_buffer_bytes;
 	void* mp_edge_buffer;
-	static const size_t m_buffer_alloc_bytes = (1024*16);
+	static const size_t m_buffer_alloc_bytes = (1024*512);
 	typename SortReduce<K,V>::IoEndpoint* mp_sr_ep;
 
 
@@ -63,13 +66,16 @@ private:
 
 	void WorkerThread(int i);
 	
-
-
 	//typedef struct __attribute__ ((__packed__)) {
 	typedef struct {
 		K key;
 		V val;
 	} KvPair;
+
+private:
+	std::atomic<size_t> m_index_blocks_read;
+	std::atomic<size_t> m_edge_blocks_read;
+
 };
 
 #endif

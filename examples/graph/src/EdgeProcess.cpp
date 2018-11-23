@@ -7,15 +7,17 @@ EdgeProcess<K,V>::EdgeProcess(std::string ridx_path, std::string matrix_path, V(
 	m_thread_count = 0;
 	m_ep_count = 0;
 	mp_sr_ep = NULL;
-
+	
 	mp_edge_program = edge_program;
-	m_ridx_fd = open(ridx_path.c_str(), O_RDONLY, S_IRUSR|S_IWUSR);
-	m_matrix_fd = open(matrix_path.c_str(), O_RDONLY, S_IRUSR|S_IWUSR);
+	m_ridx_fd = open(ridx_path.c_str(), O_RDONLY|O_DIRECT, S_IRUSR|S_IWUSR);
+	m_matrix_fd = open(matrix_path.c_str(), O_RDONLY|O_DIRECT, S_IRUSR|S_IWUSR);
 	if ( m_ridx_fd < 0 || m_matrix_fd < 0 ) {
 		fprintf(stderr, "ERROR: Graph ridx or matrix file not found\n" );
 	}
-	mp_idx_buffer = malloc(m_buffer_alloc_bytes);
-	mp_edge_buffer = malloc(m_buffer_alloc_bytes);
+	//mp_idx_buffer = malloc(m_buffer_alloc_bytes);
+	mp_idx_buffer = aligned_alloc(512, m_buffer_alloc_bytes);
+	//mp_edge_buffer = malloc(m_buffer_alloc_bytes);
+	mp_edge_buffer = aligned_alloc(512, m_buffer_alloc_bytes);
 
 	mq_req_blocks = new SortReduceUtils::MutexedQueue<SortReduceTypes::Block>();
 	mq_free_block = new SortReduceUtils::MutexedQueue<SortReduceTypes::Block>();
@@ -74,6 +76,9 @@ EdgeProcess<K,V>::Start() {
 		ma_sr_thread[i] = std::thread(&EdgeProcess<K,V>::WorkerThread,this, i);
 	}
 	m_thread_count = m_ep_count;
+
+	m_index_blocks_read = 0;
+	m_edge_blocks_read = 0;
 }
 
 template <class K, class V>
@@ -94,6 +99,9 @@ EdgeProcess<K,V>::Finish() {
 	m_thread_count = 0;
 
 	m_kill_threads = false;
+
+	printf( "Index bytes read : %lx\n", m_index_blocks_read*m_buffer_alloc_bytes );
+	printf( "Edge bytes read : %lx\n", m_edge_blocks_read*m_buffer_alloc_bytes);
 }
 
 template <class K, class V>
@@ -125,10 +133,12 @@ EdgeProcess<K,V>::SourceVertex(K key, V val, bool write ) {
 	size_t byte_offset = ((size_t)key)*sizeof(uint64_t);
 	if ( byte_offset < m_idx_buffer_offset || byte_offset + 2*sizeof(uint64_t) > m_idx_buffer_offset+m_idx_buffer_bytes ) {
 		size_t byte_offset_aligned = byte_offset&(~0x3ff); // 1 KB alignment
-		pread(m_ridx_fd, mp_idx_buffer, m_buffer_alloc_bytes, byte_offset_aligned);
+		size_t res = pread(m_ridx_fd, mp_idx_buffer, m_buffer_alloc_bytes, byte_offset_aligned);
 		m_idx_buffer_offset = byte_offset_aligned;
 		m_idx_buffer_bytes = m_buffer_alloc_bytes;
 		//printf( "Read new %lx %lx -- %s\n", ret, ((uint64_t*)mp_idx_buffer)[4], strerror(errno ));
+
+		m_index_blocks_read++;
 	}
 	size_t internal_offset = byte_offset - m_idx_buffer_offset;
 
@@ -160,6 +170,8 @@ EdgeProcess<K,V>::SourceVertex(K key, V val, bool write ) {
 		last_neighbor = neighbor;
 		*/
 		if ( write ) while (!mp_sr_ep->Update(neighbor, edgeval)) usleep(100);
+
+		m_edge_blocks_read++;
 	}
 
 }
@@ -170,13 +182,13 @@ EdgeProcess<K,V>::WorkerThread(int idx) {
 
 	size_t idx_buffer_offset = 0;
 	size_t idx_buffer_bytes = 0;
-	void* idx_buffer = malloc(m_buffer_alloc_bytes);
+	void* idx_buffer = aligned_alloc(512, m_buffer_alloc_bytes);
+	//mp_edge_buffer = malloc(m_buffer_alloc_bytes);
 
 	size_t edge_buffer_offset = 0;
 	size_t edge_buffer_bytes = 0;
-	void* edge_buffer = malloc(m_buffer_alloc_bytes);
+	void* edge_buffer = aligned_alloc(512, m_buffer_alloc_bytes);
 	typename SortReduce<K,V>::IoEndpoint* ep = ma_sr_ep[idx];
-
 
 	while ( !m_kill_threads || mq_req_blocks->size() > 0 ) {
 		SortReduceTypes::Block block = mq_req_blocks->get();
@@ -198,10 +210,11 @@ EdgeProcess<K,V>::WorkerThread(int idx) {
 			size_t byte_offset = ((size_t)key)*sizeof(uint64_t);
 			if ( byte_offset < idx_buffer_offset || byte_offset + 2*sizeof(uint64_t) > idx_buffer_offset+idx_buffer_bytes ) {
 				size_t byte_offset_aligned = byte_offset&(~0x3ff); // 1 KB alignment
-				pread(m_ridx_fd, idx_buffer, m_buffer_alloc_bytes, byte_offset_aligned);
+				size_t res = pread(m_ridx_fd, idx_buffer, m_buffer_alloc_bytes, byte_offset_aligned);
 				idx_buffer_offset = byte_offset_aligned;
 				idx_buffer_bytes = m_buffer_alloc_bytes;
 				//printf( "Read new %lx %lx -- %s\n", ret, ((uint64_t*)mp_idx_buffer)[4], strerror(errno ));
+				m_index_blocks_read ++;
 			}
 			size_t internal_offset = byte_offset - idx_buffer_offset;
 
@@ -221,6 +234,8 @@ EdgeProcess<K,V>::WorkerThread(int idx) {
 					pread(m_matrix_fd, edge_buffer, m_buffer_alloc_bytes, byte_offset_aligned);
 					edge_buffer_offset = byte_offset_aligned;
 					edge_buffer_bytes = m_buffer_alloc_bytes;
+
+					m_edge_blocks_read++;
 				}
 				size_t internal_offset = edge_offset - edge_buffer_offset;
 				//FIXME if the matrix format changes
