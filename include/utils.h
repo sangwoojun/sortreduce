@@ -5,6 +5,8 @@
 #include <mutex>
 
 #include <time.h>
+#include <fcntl.h>
+#include <libaio.h>
 
 #include "types.h"
 
@@ -37,6 +39,7 @@ namespace SortReduceUtils {
 		size_t deq_out(void** buffer);
 		int out_count();
 	};
+
 }
 
 
