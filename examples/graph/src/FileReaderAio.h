@@ -13,9 +13,12 @@ template <class V>
 class FileReaderAio {
 	public:
 		FileReaderAio(std::string path, size_t buffer_bytes=1024*128, size_t depth = 1024*1024);
+		FileReaderAio(int fd, size_t buffer_bytes=1024*128, size_t depth = 1024*1024);
 		~FileReaderAio();
 		bool ReadReq(size_t idx);
+		bool Available();
 		V GetNext();
+		size_t GetInFlight() { return m_inflight; };
 	private:
 		int m_fd;
 		io_context_t m_io_ctx;
@@ -32,6 +35,7 @@ class FileReaderAio {
 		size_t m_buffer_bytes;
 
 		std::queue<size_t> mq_req_offset;
+		std::queue<V> mq_read_result;
 
 
 		static const int m_aio_depth = 128;
@@ -43,6 +47,10 @@ class FileReaderAio {
 		size_t m_req_buffer_bytes;
 		size_t m_resp_buffer_offset;
 		size_t m_resp_buffer_bytes;
+		void* mp_resp_buffer;
+		int m_resp_arg_idx;
+
+		size_t m_inflight;
 
 };
 

@@ -133,7 +133,7 @@ EdgeProcess<K,V>::SourceVertex(K key, V val, bool write ) {
 	size_t byte_offset = ((size_t)key)*sizeof(uint64_t);
 	if ( byte_offset < m_idx_buffer_offset || byte_offset + 2*sizeof(uint64_t) > m_idx_buffer_offset+m_idx_buffer_bytes ) {
 		size_t byte_offset_aligned = byte_offset&(~0x3ff); // 1 KB alignment
-		size_t res = pread(m_ridx_fd, mp_idx_buffer, m_buffer_alloc_bytes, byte_offset_aligned);
+		pread(m_ridx_fd, mp_idx_buffer, m_buffer_alloc_bytes, byte_offset_aligned);
 		m_idx_buffer_offset = byte_offset_aligned;
 		m_idx_buffer_bytes = m_buffer_alloc_bytes;
 		//printf( "Read new %lx %lx -- %s\n", ret, ((uint64_t*)mp_idx_buffer)[4], strerror(errno ));
@@ -210,7 +210,7 @@ EdgeProcess<K,V>::WorkerThread(int idx) {
 			size_t byte_offset = ((size_t)key)*sizeof(uint64_t);
 			if ( byte_offset < idx_buffer_offset || byte_offset + 2*sizeof(uint64_t) > idx_buffer_offset+idx_buffer_bytes ) {
 				size_t byte_offset_aligned = byte_offset&(~0x3ff); // 1 KB alignment
-				size_t res = pread(m_ridx_fd, idx_buffer, m_buffer_alloc_bytes, byte_offset_aligned);
+				pread(m_ridx_fd, idx_buffer, m_buffer_alloc_bytes, byte_offset_aligned);
 				idx_buffer_offset = byte_offset_aligned;
 				idx_buffer_bytes = m_buffer_alloc_bytes;
 				//printf( "Read new %lx %lx -- %s\n", ret, ((uint64_t*)mp_idx_buffer)[4], strerror(errno ));
@@ -261,5 +261,6 @@ EdgeProcess<K,V>::WorkerThread(int idx) {
 
 	//printf( "EdgeProcess WorkerThread %d ending\n", idx );
 }
+
 
 TEMPLATE_EXPLICIT_INSTANTIATION(EdgeProcess)

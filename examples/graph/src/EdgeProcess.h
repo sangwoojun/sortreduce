@@ -19,6 +19,7 @@
 #include "types.h"
 #include "utils.h"
 #include "sortreduce.h"
+#include "FileReaderAio.h"
 
 #define MAX_EDGEPROC_REQS 16
 #define MAX_EDGEPROC_THREADS 8
@@ -46,7 +47,7 @@ private:
 	size_t m_edge_buffer_offset;
 	size_t m_edge_buffer_bytes;
 	void* mp_edge_buffer;
-	static const size_t m_buffer_alloc_bytes = (1024*512);
+	static const size_t m_buffer_alloc_bytes = (1024*256);
 	typename SortReduce<K,V>::IoEndpoint* mp_sr_ep;
 
 

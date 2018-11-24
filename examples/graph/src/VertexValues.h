@@ -27,6 +27,7 @@ public:
 	VertexValues(std::string temp_directory, K key_count, V default_value,bool(*isactive)(V,V,bool), int thread_count = 1);
 	~VertexValues();
 	void Start();
+	void Finish();
 	bool Update(K key, V val);
 	void NextIteration();
 	size_t GetActiveCount();

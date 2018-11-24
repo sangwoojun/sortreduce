@@ -75,6 +75,9 @@ int main(int argc, char** argv) {
 		edge_process->SetSortReduceEndpoint(ep);
 		edge_process->AddSortReduceEndpoint(sr->GetEndpoint(true));
 		edge_process->AddSortReduceEndpoint(sr->GetEndpoint(true));
+		edge_process->AddSortReduceEndpoint(sr->GetEndpoint(true));
+		edge_process->AddSortReduceEndpoint(sr->GetEndpoint(true));
+		edge_process->AddSortReduceEndpoint(sr->GetEndpoint(true));
 
 		std::chrono::high_resolution_clock::time_point start, iteration_start;
 		start = std::chrono::high_resolution_clock::now();
@@ -145,10 +148,13 @@ int main(int argc, char** argv) {
 		}
 
 
+		vertex_values->Finish();
 		size_t active_cnt = vertex_values->GetActiveCount();
+
 		now = std::chrono::high_resolution_clock::now();
 		duration_milli = std::chrono::duration_cast<std::chrono::milliseconds> (now-start);
 		iteration_duration_milli = std::chrono::duration_cast<std::chrono::milliseconds> (now-iteration_start);
+		
 		printf( "\t\t++ Iteration done : %lu ms / %lu ms, Active %ld\n", duration_milli.count(), iteration_duration_milli.count(), active_cnt );
 		if ( active_cnt == 0 ) break;
 		vertex_values->NextIteration();
