@@ -38,7 +38,7 @@ inline bool is_active(uint32_t old, uint32_t newv, bool marked) {
 int main(int argc, char** argv) {
 	srand(time(0));
 
-	if ( argc < 3 ) {
+	if ( argc < 4 ) {
 		fprintf(stderr, "usage: %s ridx matrix directory \n", argv[0] );
 		exit(1);
 	}
@@ -46,6 +46,23 @@ int main(int argc, char** argv) {
 	char* tmp_dir = argv[1];
 	char* idx_path = argv[2];
 	char* mat_path = argv[3];
+
+	int max_thread_count = 12;
+	int max_sr_thread_count = 8;
+	int max_vertexval_thread_count = 4;
+	int max_edgeproc_thread_count = 8;
+	if ( argc > 4 ) {
+		max_thread_count = atoi(argv[4]);
+	}
+	if ( max_thread_count >= 32 ) {
+		max_sr_thread_count = 28;
+		max_vertexval_thread_count = 8;
+		max_edgeproc_thread_count = 8;
+	} else if ( max_thread_count >= 24 ) {
+		max_sr_thread_count = 20;
+		max_vertexval_thread_count = 8;
+		max_edgeproc_thread_count = 8;
+	}
 		
 	std::chrono::high_resolution_clock::time_point start_all;
 	start_all = std::chrono::high_resolution_clock::now();
@@ -57,7 +74,7 @@ int main(int argc, char** argv) {
 
 	EdgeProcess<uint32_t,uint32_t>* edge_process = new EdgeProcess<uint32_t,uint32_t>(idx_path, mat_path, &edge_program);
 	size_t vertex_count = edge_process->GetVertexCount();
-	VertexValues<uint32_t,uint32_t>* vertex_values = new VertexValues<uint32_t,uint32_t>(tmp_dir, vertex_count, 0xffffffff, &is_active, 1);
+	VertexValues<uint32_t,uint32_t>* vertex_values = new VertexValues<uint32_t,uint32_t>(tmp_dir, vertex_count, 0xffffffff, &is_active, max_vertexval_thread_count);
 
 
 	int iteration = 0;
@@ -66,14 +83,14 @@ int main(int argc, char** argv) {
 		sprintf(filename, "out%04d.sr", iteration);
 
 		SortReduceTypes::Config<uint32_t,uint32_t>* conf =
-			new SortReduceTypes::Config<uint32_t,uint32_t>(tmp_dir, filename, 8);
+			new SortReduceTypes::Config<uint32_t,uint32_t>(tmp_dir, filename, max_sr_thread_count);
 		conf->quiet = true;
 		conf->SetUpdateFunction(&vertex_update);
 
 		SortReduce<uint32_t,uint32_t>* sr = new SortReduce<uint32_t,uint32_t>(conf);
 		SortReduce<uint32_t,uint32_t>::IoEndpoint* ep = sr->GetEndpoint(true);
 		edge_process->SetSortReduceEndpoint(ep);
-		for ( int i = 0; i < 8; i++ ) {
+		for ( int i = 0; i < max_edgeproc_thread_count; i++ ) {
 			//FIXME this is inefficient...
 			edge_process->AddSortReduceEndpoint(sr->GetEndpoint(true));
 		}

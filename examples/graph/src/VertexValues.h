@@ -17,7 +17,7 @@
 #include "utils.h"
 
 #define MAX_VERTEXVAL_REQS 16
-#define MAX_VERTEXVAL_THREADS 2
+#define MAX_VERTEXVAL_THREADS 8
 
 #define AIO_DEPTH 128
 
@@ -63,7 +63,7 @@ private:
 	bool m_io_buffer_dirty = false;
 	static const size_t m_io_buffer_alloc_items = 1024*2;
 	static const size_t m_io_buffer_alloc_size = (m_io_buffer_alloc_items*sizeof(ValueItem));
-	static const size_t m_write_buffer_alloc_size = 1024*1024*4;
+	static const size_t m_write_buffer_alloc_size = 1024*1024*32;
 
 	
 	std::string m_temp_directory;

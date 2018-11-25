@@ -222,9 +222,8 @@ VertexValues<K,V>::Update(K key, V val){
 */
 
 	
-	//size_t buffer_offset = key/m_io_buffer_alloc_items;
-	//size_t thread_idx = buffer_offset % (m_cur_thread_count);
-	size_t thread_idx = 0;
+	size_t buffer_offset = key/m_io_buffer_alloc_items;
+	size_t thread_idx = buffer_offset % (m_cur_thread_count);
 
 	if ( ma_cur_out_block[thread_idx].valid == false ) {
 		ma_cur_out_block[thread_idx] = mq_free_block->get();
@@ -510,7 +509,7 @@ VertexValues<K,V>::WorkerThread(int idx) {
 				active_buffer_idx++;
 
 				if ( active_buffer_idx*sizeof(KvPair) > m_write_buffer_alloc_size ) {
-					//FIXME 
+					//FIXME not in order across vertices... maybe that's okay
 					m_mutex.lock();
 					write(m_active_vertices_fd, p_active_buffer, active_buffer_idx*sizeof(KvPair));
 					active_buffer_idx = 0;
@@ -547,7 +546,7 @@ VertexValues<K,V>::WorkerThread(int idx) {
 		if ( m_kill_threads && q_req->size() == 0 && cur_block_offset_idx == 0 && q_req_kv.empty() && q_write.empty() && aio_inflight == 0 ) break;
 	}
 	if ( active_buffer_idx > 0 ) {
-		//FIXME 
+		//FIXME not in order across vertices... maybe that's okay
 		m_mutex.lock();
 		write(m_active_vertices_fd, p_active_buffer, active_buffer_idx*sizeof(KvPair));
 		active_buffer_idx = 0;
