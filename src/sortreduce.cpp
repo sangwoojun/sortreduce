@@ -215,7 +215,7 @@ void
 SortReduce<K,V>::ManagerThread() {
 	//printf( "maximum threads: %d\n", config->maximum_threads );
 
-	const size_t reducer_from_mem_fan_in = 64;
+	const size_t reducer_from_mem_fan_in = 32;
 	const size_t reducer_from_mem_fan_in_max = 128;
 	const size_t reducer_from_storage_fan_in_max = 32;
 	int reducer_from_mem_max_count = 1;
@@ -245,6 +245,10 @@ SortReduce<K,V>::ManagerThread() {
 		exit(1);
 	}
 	if ( max_storage_bytes == 0 && fs_avail_bytes > 0 ) max_storage_bytes = fs_avail_bytes;
+
+	while ( mp_block_sorter->GetThreadCount() < m_maximum_threads - 3 ) {
+		mp_block_sorter->SpawnThread();
+	}
 
 	while (true) {
 		//sleep(1);

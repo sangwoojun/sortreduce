@@ -47,7 +47,7 @@ private:
 	size_t m_edge_buffer_offset;
 	size_t m_edge_buffer_bytes;
 	void* mp_edge_buffer;
-	static const size_t m_buffer_alloc_bytes = (1024*64);
+	static const size_t m_buffer_alloc_bytes = (1024*32);
 	typename SortReduce<K,V>::IoEndpoint* mp_sr_ep;
 
 
