@@ -73,11 +73,10 @@ int main(int argc, char** argv) {
 		SortReduce<uint32_t,uint32_t>* sr = new SortReduce<uint32_t,uint32_t>(conf);
 		SortReduce<uint32_t,uint32_t>::IoEndpoint* ep = sr->GetEndpoint(true);
 		edge_process->SetSortReduceEndpoint(ep);
-		edge_process->AddSortReduceEndpoint(sr->GetEndpoint(true));
-		edge_process->AddSortReduceEndpoint(sr->GetEndpoint(true));
-		edge_process->AddSortReduceEndpoint(sr->GetEndpoint(true));
-		edge_process->AddSortReduceEndpoint(sr->GetEndpoint(true));
-		edge_process->AddSortReduceEndpoint(sr->GetEndpoint(true));
+		for ( int i = 0; i < 8; i++ ) {
+			//FIXME this is inefficient...
+			edge_process->AddSortReduceEndpoint(sr->GetEndpoint(true));
+		}
 
 		std::chrono::high_resolution_clock::time_point start, iteration_start;
 		start = std::chrono::high_resolution_clock::now();
