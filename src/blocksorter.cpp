@@ -130,7 +130,7 @@ BlockSorter<K,V>::SpawnThread() {
 	BlockSorterThread<K,V>* new_thread = new BlockSorterThread<K,V>(this->mp_config, this->m_buffer_queue_in, this->m_buffer_queue_out, this->mq_temp_files, &this->m_status, mv_sorter_threads.size());
 	mv_sorter_threads.push_back(new_thread);
 
-	printf( "BlockSorter thread spawned! %lu\n", mv_sorter_threads.size() ); fflush(stdout);
+	//printf( "BlockSorter thread spawned! %lu\n", mv_sorter_threads.size() ); fflush(stdout);
 }
 
 template <class K, class V>
@@ -141,7 +141,7 @@ BlockSorter<K,V>::KillThread() {
 		mv_sorter_threads.pop_back();
 	}
 	
-	printf( "BlockSorter thread killed! %lu\n", mv_sorter_threads.size() ); fflush(stdout);
+	//printf( "BlockSorter thread killed! %lu\n", mv_sorter_threads.size() ); fflush(stdout);
 }
 
 /**

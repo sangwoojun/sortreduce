@@ -125,8 +125,10 @@ VertexValues<K,V>::Finish() {
 
 
 	m_kill_threads = true;
+	m_total_active_cnt = m_active_cnt;
 	for ( int i = 0; i < m_cur_thread_count; i++ ) {
 		ma_worker_thread[i].join();
+		m_total_active_cnt += ma_active_count[i];
 	}
 	m_cur_thread_count = 0;
 	
@@ -147,7 +149,7 @@ VertexValues<K,V>::Finish() {
 		//unlink(filename);
 	}
 	
-	printf( "\t\t++ Iteration %d done: %ld/%ld\n", m_cur_iteration, m_active_cnt, m_iteration_element_cnt );
+	printf( "\t\t++ Iteration %d done: %ld\n", m_cur_iteration, m_iteration_element_cnt );
 }
 
 template <class K, class V>
@@ -155,6 +157,9 @@ void
 VertexValues<K,V>::NextIteration() {
 	m_cur_iteration++;
 
+	for ( int i = 0; i < m_max_thread_count; i++ ) {
+		ma_active_count[i] = 0;
+	}
 	m_active_cnt = 0;
 	m_iteration_element_cnt = 0;
 }
@@ -162,11 +167,7 @@ VertexValues<K,V>::NextIteration() {
 template <class K, class V>
 size_t
 VertexValues<K,V>::GetActiveCount(){
-	size_t ret = m_active_cnt;
-	for ( int i = 0; i < m_cur_thread_count; i++ ) {
-		ret += ma_active_count[i];
-	}
-	return ret;
+	return m_total_active_cnt;
 }
 
 
@@ -372,6 +373,11 @@ VertexValues<K,V>::WorkerThread(int idx) {
 	int resp_arg_idx = -1;
 
 	int aio_inflight = 0;
+	bool io_buffer_dirty = false;
+	
+	void* p_active_buffer = malloc(m_write_buffer_alloc_size);
+	size_t active_buffer_idx = 0;
+
 
 	while ( true ) {
 		if ( cur_block.valid == false ) {
@@ -459,7 +465,7 @@ VertexValues<K,V>::WorkerThread(int idx) {
 
 					IocbArgs* arg = &a_request_args[aio_idx];
 					if ( resp_arg_idx >= 0 ) {
-						if ( m_io_buffer_dirty ) {
+						if ( io_buffer_dirty ) {
 							q_write.push(resp_arg_idx);
 						} else {
 							q_free_req.push(resp_arg_idx);
@@ -494,21 +500,24 @@ VertexValues<K,V>::WorkerThread(int idx) {
 				vi.iteration = m_cur_iteration + 1;
 				*pvi = vi;
 
-				m_io_buffer_dirty = true;
+				io_buffer_dirty = true;
 
 				KvPair wkvp;
 				wkvp.key = kvp.key;
 				wkvp.val = kvp.val;
-				KvPair* active_buffer = (KvPair*)mp_active_buffer;
-				active_buffer[m_active_buffer_idx] = wkvp;
-				m_active_buffer_idx++;
+				KvPair* active_buffer = (KvPair*)p_active_buffer;
+				active_buffer[active_buffer_idx] = wkvp;
+				active_buffer_idx++;
 
-				if ( m_active_buffer_idx*sizeof(KvPair) > m_write_buffer_alloc_size ) {
-					write(m_active_vertices_fd, mp_active_buffer, m_active_buffer_idx*sizeof(KvPair));
-					m_active_buffer_idx = 0;
+				if ( active_buffer_idx*sizeof(KvPair) > m_write_buffer_alloc_size ) {
+					//FIXME 
+					m_mutex.lock();
+					write(m_active_vertices_fd, p_active_buffer, active_buffer_idx*sizeof(KvPair));
+					active_buffer_idx = 0;
+					m_mutex.unlock();
 				}
 
-				m_active_cnt++;
+				ma_active_count[idx]++;
 
 
 			}
@@ -537,6 +546,18 @@ VertexValues<K,V>::WorkerThread(int idx) {
 		// break when
 		if ( m_kill_threads && q_req->size() == 0 && cur_block_offset_idx == 0 && q_req_kv.empty() && q_write.empty() && aio_inflight == 0 ) break;
 	}
+	if ( active_buffer_idx > 0 ) {
+		//FIXME 
+		m_mutex.lock();
+		write(m_active_vertices_fd, p_active_buffer, active_buffer_idx*sizeof(KvPair));
+		active_buffer_idx = 0;
+		m_mutex.unlock();
+	}
+
+	for ( int i = 0; i < AIO_DEPTH; i++ ) {
+		free(a_request_args[i].buffer);
+	}
+	free(p_active_buffer);
 
 	printf( "VertexValues WorkerThread done %d\n", idx );
 

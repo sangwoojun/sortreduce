@@ -72,6 +72,7 @@ private:
 
 	uint32_t m_cur_iteration = 0;
 	size_t m_active_cnt = 0;
+	size_t m_total_active_cnt = 0;
 	size_t m_iteration_element_cnt = 0;
 	size_t ma_active_count[MAX_VERTEXVAL_THREADS];
 	

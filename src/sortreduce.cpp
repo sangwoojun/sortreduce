@@ -457,19 +457,17 @@ SortReduce<K,V>::ManagerThread() {
 				if ( !m_config->quiet ) printf( "SortReduce writing inmem directly to file %s\n", filename.c_str() );
 			}
 			SortReduceReducer::MergeReducer<K,V>* merger = NULL;
-			merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory, filename);
-			/*
+			//merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory, filename);
 			if ( to_sort == 1 ) {
 				//FIXME just write it to file!
 				merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory);
 			} else {
-				SortReduceReducer::MergeReducer_MultiTree<K,V>* mmerger = new SortReduceReducer::MergeReducer_MultiTree<K,V>(m_config->update, m_config->temporary_directory, 2, ""); // Just so we can use acceleration
+				SortReduceReducer::MergeReducer_MultiTree<K,V>* mmerger = new SortReduceReducer::MergeReducer_MultiTree<K,V>(m_config->update, m_config->temporary_directory, 4, ""); // Just so we can use acceleration
 				if ( mmerger->AcceleratorAvailable() && to_sort > HW_MAXIMUM_SOURCES ) {
 					to_sort = HW_MAXIMUM_SOURCES;
 				} 
 				merger = mmerger;
 			}
-			*/
 
 
 			for ( int i = 0; i < to_sort; i++ ) {
