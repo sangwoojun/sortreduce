@@ -31,7 +31,7 @@ private:
 	int m_thread_idx;
 
 
-	static void SortKV(void* buffer, size_t bytes);
+	static size_t SortKV(void* buffer, size_t bytes, V (*update)(V,V) = NULL);
 
 	static bool CompareKV(KvPair a, KvPair b);
 

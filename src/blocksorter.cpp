@@ -232,11 +232,31 @@ BlockSorterThread<K,V>::BlockSorterThread(SortReduceTypes::Config<K,V>* config, 
 }
 	
 template <class K, class V>
-void 
-BlockSorterThread<K,V>::SortKV(void* buffer, size_t bytes) {
+size_t 
+BlockSorterThread<K,V>::SortKV(void* buffer, size_t bytes, V (*update)(V,V)) {
 	KvPair* tbuffer = (KvPair*)buffer;
 	size_t count = bytes/sizeof(KvPair);
 	std::sort(tbuffer, tbuffer+count, BlockSorterThread<K,V>::CompareKV);
+
+	size_t out_size = 0;
+
+	if ( update != NULL ) {
+		KvPair last_kvp = tbuffer[0];
+		for (size_t i = 1; i < count; i++ ) {
+			KvPair c = tbuffer[i];
+			if ( last_kvp.key == c.key ) {
+				last_kvp.val = update(last_kvp.val, c.val);
+			} else {
+				last_kvp = c;
+				tbuffer[out_size++] = last_kvp;
+			}
+		}
+		tbuffer[out_size++] = last_kvp;
+	} else {
+		out_size = count;
+	}
+
+	return out_size*sizeof(KvPair);
 }
 
 template <class K, class V>
@@ -264,7 +284,8 @@ BlockSorterThread<K,V>::SorterThread() {
 		start = std::chrono::high_resolution_clock::now();
 
 		//printf( "Begin sort block of size %ld\n", valid_bytes );
-		BlockSorterThread<K,V>::SortKV(buffer, valid_bytes);
+		size_t new_bytes = BlockSorterThread<K,V>::SortKV(buffer, valid_bytes, mp_config->update);
+		block.valid_bytes = new_bytes;
 		//printf( "Done sort block of size %ld -- \n", valid_bytes  );
 		//size_t reduced_bytes = SortReduceReducer::ReduceInBuffer<K,V>(mp_config->update, buffer, bytes);
 		end = std::chrono::high_resolution_clock::now();
