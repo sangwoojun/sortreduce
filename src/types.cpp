@@ -14,8 +14,8 @@ SortReduceTypes::Config<K,V>::Config(std::string temporary_directory, std::strin
 	this->update = NULL;
 	this->quiet = false;
 	
-	this->buffer_size = 4*1024*1024;
-	this->buffer_count = 256;
+	this->buffer_size = 8*1024*1024;
+	this->buffer_count = 128;
 	this->max_bytes_inflight = 0;
 }
 

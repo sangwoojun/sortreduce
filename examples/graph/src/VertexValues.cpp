@@ -26,6 +26,7 @@ VertexValues<K,V>::VertexValues(std::string temp_directory, K key_count, V defau
 	sprintf(tmp_filename, "%s/vertex_data.dat", temp_directory.c_str() );
 	m_vertex_data_fd = open(tmp_filename, O_RDWR|O_CREAT|O_DIRECT|O_TRUNC, S_IRUSR|S_IWUSR);
 
+/*
 	ma_value_cache = (ValueCacheItem*)malloc(sizeof(ValueCacheItem)*m_value_cache_size);
 	for ( K i = 0; i < m_value_cache_size; i++ ) {
 		ma_value_cache[i].iteration = 0;
@@ -33,6 +34,7 @@ VertexValues<K,V>::VertexValues(std::string temp_directory, K key_count, V defau
 		ma_value_cache[i].val = default_value;
 		ma_value_cache[i].valid = false;
 	}
+*/
 
 	ValueItem* defaultv = (ValueItem*)aligned_alloc(512,sizeof(ValueItem)*1024*1024);
 	for ( int i = 0; i < 1024*1024; i++ ) {
@@ -185,7 +187,7 @@ VertexValues<K,V>::Update(K key, V val){
 	
 	
 
-
+/*
 	ValueCacheItem vci = ma_value_cache[key%m_value_cache_size];
 	
 	if ( vci.valid == false || vci.key == key ) {
@@ -216,7 +218,7 @@ VertexValues<K,V>::Update(K key, V val){
 		m_iteration_element_cnt++;
 		return true;
 	}
-
+*/
 
 	
 	//size_t buffer_offset = key/m_io_buffer_alloc_items;
@@ -482,6 +484,7 @@ VertexValues<K,V>::WorkerThread(int idx) {
 			ValueItem* pvi = ((ValueItem*)(((uint8_t*)resp_buffer)+internal_offset));
 			ValueItem vi = *pvi;
 			bool is_marked = (vi.iteration == m_cur_iteration);
+
 			bool is_active = mp_is_active(vi.val, kvp.val, is_marked);
 
 			//printf( "isactive %lx %lx %s %s\n", vi.val, kvp.val, is_marked?"Y":"N", is_active?"Y":"N" );

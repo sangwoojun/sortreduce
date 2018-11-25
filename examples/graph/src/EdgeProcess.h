@@ -47,7 +47,7 @@ private:
 	size_t m_edge_buffer_offset;
 	size_t m_edge_buffer_bytes;
 	void* mp_edge_buffer;
-	static const size_t m_buffer_alloc_bytes = (1024*256);
+	static const size_t m_buffer_alloc_bytes = (1024*64);
 	typename SortReduce<K,V>::IoEndpoint* mp_sr_ep;
 
 
@@ -63,7 +63,7 @@ private:
 
 	SortReduceUtils::MutexedQueue<SortReduceTypes::Block>* mq_req_blocks;
 	SortReduceUtils::MutexedQueue<SortReduceTypes::Block>* mq_free_block;
-	static const size_t m_block_bytes = (1024*1024*8);
+	static const size_t m_block_bytes = (1024*256);
 
 	void WorkerThread(int i);
 	

@@ -47,7 +47,7 @@ template <class K, class V>
 size_t
 EdgeProcess<K,V>::GetVertexCount() {
 	size_t bytes = lseek(m_ridx_fd, 0, SEEK_END);
-	return (bytes/sizeof(uint64_t));
+	return (bytes/sizeof(uint64_t))-1; // -1 because last one is the cap
 }
 
 template <class K, class V>
@@ -156,6 +156,7 @@ EdgeProcess<K,V>::SourceVertex(K key, V val, bool write ) {
 		if ( edge_offset < m_edge_buffer_offset || edge_offset + edge_element_bytes > m_edge_buffer_offset+m_edge_buffer_bytes ) {
 			size_t byte_offset_aligned = edge_offset&(~0x3ff); // 1 KB alignment
 			pread(m_matrix_fd, mp_edge_buffer, m_buffer_alloc_bytes, byte_offset_aligned);
+			m_edge_blocks_read++;
 			m_edge_buffer_offset = byte_offset_aligned;
 			m_edge_buffer_bytes = m_buffer_alloc_bytes;
 		}
@@ -171,7 +172,6 @@ EdgeProcess<K,V>::SourceVertex(K key, V val, bool write ) {
 		*/
 		if ( write ) while (!mp_sr_ep->Update(neighbor, edgeval)) usleep(100);
 
-		m_edge_blocks_read++;
 	}
 
 }
@@ -184,6 +184,8 @@ EdgeProcess<K,V>::WorkerThread(int idx) {
 	size_t idx_buffer_bytes = 0;
 	void* idx_buffer = aligned_alloc(512, m_buffer_alloc_bytes);
 	//mp_edge_buffer = malloc(m_buffer_alloc_bytes);
+
+	size_t vertex_count = this->GetVertexCount();
 
 	size_t edge_buffer_offset = 0;
 	size_t edge_buffer_bytes = 0;
@@ -200,12 +202,13 @@ EdgeProcess<K,V>::WorkerThread(int idx) {
 		size_t size = block.valid_bytes;
 		size_t cnt = size/sizeof(KvPair);
 
-
 		size_t edge_element_bytes = sizeof(K);
 		for ( size_t i = 0; i < cnt; i++ ) { 
 			KvPair kvp = buf[i];
 			K key = kvp.key;
 			V val = kvp.val;
+
+			if ( (size_t)key >= vertex_count ) continue;
 
 			size_t byte_offset = ((size_t)key)*sizeof(uint64_t);
 			if ( byte_offset < idx_buffer_offset || byte_offset + 2*sizeof(uint64_t) > idx_buffer_offset+idx_buffer_bytes ) {
