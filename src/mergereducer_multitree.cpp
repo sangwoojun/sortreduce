@@ -114,6 +114,9 @@ SortReduceReducer::MergeReducer_MultiTree<K,V>::Start() {
 	if ( accelerate ) {
 		maximum_2to1_nodes = 32;
 		thread_budget_left --; //manager thread
+	} else if ( m_maximum_threads >= 16 ) {
+		maximum_2to1_nodes = 8;
+		thread_budget_left = 8; // FIXME
 	} else if ( m_maximum_threads >= 8 ) {
 		maximum_2to1_nodes = 4;
 		//thread_budget_left -= 4; // 3* 2-to-1, reducer
