@@ -97,9 +97,9 @@ int main(int argc, char** argv) {
 	EdgeProcess<uint32_t,uint32_t>* edge_process = new EdgeProcess<uint32_t,uint32_t>(idx_path, mat_path, &edge_program);
 	size_t vertex_count = edge_process->GetVertexCount();
 	g_vertex_count = vertex_count;
-	VertexValues<uint32_t,uint32_t>* vertex_values = new VertexValues<uint32_t,uint32_t>(tmp_dir, vertex_count, 0xffffffff, &is_active, &finalize_program, max_vertexval_thread_count);
-
 	float init_val = 1.0/(float)vertex_count;
+	VertexValues<uint32_t,uint32_t>* vertex_values = new VertexValues<uint32_t,uint32_t>(tmp_dir, vertex_count, *(uint32_t*)&init_val, &is_active, &finalize_program, max_vertexval_thread_count);
+
 
 
 	int iteration = 0;
