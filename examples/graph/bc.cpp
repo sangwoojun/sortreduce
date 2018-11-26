@@ -9,52 +9,33 @@
 #include "sortreduce.h"
 #include "filekvreader.h"
 #include "types.h"
+#include "utils.h"
 
 #include "EdgeProcess.h"
 #include "VertexValues.h"
 
+#include "BCMergeFlip.h"
+
 
 
 inline uint32_t vertex_update(uint32_t a, uint32_t b) {
-	float af = *(float*)&a;
-	float bf = *(float*)&b;
-	float tf = af+bf;
-	
-	uint32_t ret = *(uint32_t*)&tf;
+	uint32_t ret = a;
 	return ret;
 }
 inline uint32_t edge_program(uint32_t vid, uint32_t value, uint32_t fanout) {
 	//printf( "Edge-program source: %x val: %x fanout: %x\n", vid, value, fanout);
-	float af = *(float*)&value;
-	float tf = af/(float)fanout;
-
-	uint32_t ret = *(uint32_t*)&tf;
-
-	return ret;
+	return vid;
 }
 
-size_t g_vertex_count = 1;
-inline uint32_t finalize_program(uint32_t oldval, uint32_t val) {
-	float damp = 0.15/(float)g_vertex_count;
-	float af = *(float*)&val;
-	float tf = damp + af*0.85;
-	uint32_t ret = *(uint32_t*)&tf;
-	return ret;
+inline uint32_t finalize_program(uint32_t oldval, uint32_t newval) {
+	return newval;
 }
 
 inline bool is_active(uint32_t old, uint32_t newv, bool marked) {
-	if ( !marked ) return false;
-
-	float af = *(float*)&old;
-	float bf = *(float*)&newv;
-
-	if ( af > bf ) {
-		if (af-bf < 0.0001 ) return false;
-		else return true;
-	} else {
-		if (bf-af < 0.0001 ) return false;
-		else return true;
-	}
+	//printf( "Comparing %lx %lx %s\n", old, newv, marked?"Y":"N" );
+	if ( old == 0xffffffff ) return true;
+	//printf( "Comparing %x %x %s\n", old, newv, marked?"Y":"N" );
+	return false;
 }
 
 int main(int argc, char** argv) {
@@ -96,10 +77,7 @@ int main(int argc, char** argv) {
 
 	EdgeProcess<uint32_t,uint32_t>* edge_process = new EdgeProcess<uint32_t,uint32_t>(idx_path, mat_path, &edge_program);
 	size_t vertex_count = edge_process->GetVertexCount();
-	g_vertex_count = vertex_count;
 	VertexValues<uint32_t,uint32_t>* vertex_values = new VertexValues<uint32_t,uint32_t>(tmp_dir, vertex_count, 0xffffffff, &is_active, &finalize_program, max_vertexval_thread_count);
-
-	float init_val = 1.0/(float)vertex_count;
 
 
 	int iteration = 0;
@@ -127,26 +105,25 @@ int main(int argc, char** argv) {
 
 		printf( "\t\t++ Starting iteration %d\n", iteration ); fflush(stdout);
 		edge_process->Start();
-
 		if ( iteration == 0 ) {
-			for ( size_t i = 0; i < vertex_count; i++ ) {
-				edge_process->SourceVertex((uint32_t)i,*(uint32_t*)&init_val, true);
-			}
+			edge_process->SourceVertex(12,0, true);
 		} else {
-			// TODO subgraph selection needs row-compresed file.
-			SortReduceUtils::FileKvReader<uint32_t,uint32_t>* reader = new SortReduceUtils::FileKvReader<uint32_t,uint32_t>("vertex_data.dat", conf);
+			// TODO Spawn edge process threads
+
+			int fd = vertex_values->OpenActiveFile(iteration-1);
+			SortReduceUtils::FileKvReader<uint32_t,uint32_t>* reader = new SortReduceUtils::FileKvReader<uint32_t,uint32_t>(fd);
 			std::tuple<uint32_t,uint32_t,bool> res = reader->Next();
-			uint32_t idx = 0;
 			while ( std::get<2>(res) ) {
-				//uint32_t iteration = std::get<0>(res);
+				uint32_t key = std::get<0>(res);
 				uint32_t val = std::get<1>(res);
-				edge_process->SourceVertex(idx,val, true);
+				edge_process->SourceVertex(key,val, true);
 				res = reader->Next();
-				idx++;
 
 				//printf( "Vertex %lx %lx\n", key, val );
 			}
 			delete reader;
+
+			// TODO kill edge process threads
 		}
 		edge_process->Finish();
 		sr->Finish();
@@ -159,6 +136,15 @@ int main(int argc, char** argv) {
 		while ( status.done_external == false ) {
 			usleep(1000);
 			status = sr->CheckStatus();
+			/*
+			printf( "%s %s:%d-%d %s:%d-%d\n",
+				status.done_input ? "yes":"no",
+				status.done_inmem ? "yes":"no",
+				status.internal_count, status.sorted_count,
+				status.done_external ? "yes":"no",
+				status.external_count, status.file_count);
+			fflush(stdout);
+			*/
 		}
 
 		now = std::chrono::high_resolution_clock::now();
@@ -189,18 +175,49 @@ int main(int argc, char** argv) {
 		iteration_duration_milli = std::chrono::duration_cast<std::chrono::milliseconds> (now-iteration_start);
 		
 		printf( "\t\t++ Iteration done : %lu ms / %lu ms, Active %ld\n", duration_milli.count(), iteration_duration_milli.count(), active_cnt );
-		if ( active_cnt == 0 ) break;
-		vertex_values->NextIteration();
+		
 		iteration++;
 
-		delete sr;
+		if ( active_cnt == 0 ) break;
+		vertex_values->NextIteration();
 
-		//if ( iteration > 20 ) break;
-		if ( iteration > 1 ) break;
+		delete sr;
 	}
 	now = std::chrono::high_resolution_clock::now();
 	duration_milli = std::chrono::duration_cast<std::chrono::milliseconds> (now-start_all);
-	printf( "\t\t++ All Done! %lu ms\n", duration_milli.count() );
+	printf( "\t\t++ BFS portion Done! %lu ms %d iterations\n", duration_milli.count(), iteration );
+
+	for ( int ri = iteration-1; ri >= 0; ri-- ) {
+		char old_filename[128], dst_filename[128];
+		sprintf(old_filename, "reverse%04d.sr", ri+1);
+		sprintf(dst_filename, "reverse%04d.sr", ri);
+
+		int active_fd = vertex_values->OpenActiveFile(ri);
+		BCMergeFlip<uint32_t,uint32_t>* mflip = NULL;
+		if ( ri == iteration-1 ) {
+			mflip = new BCMergeFlip<uint32_t,uint32_t>(tmp_dir, "", active_fd);
+		} else {
+			mflip = new BCMergeFlip<uint32_t,uint32_t>(tmp_dir, old_filename, active_fd);
+		}
+
+		SortReduceTypes::Config<uint32_t,uint32_t>* conf =
+			new SortReduceTypes::Config<uint32_t,uint32_t>(tmp_dir, dst_filename, max_sr_thread_count);
+		conf->quiet = true;
+		conf->SetUpdateFunction(&vertex_update);
+
+
+		
+		SortReduceUtils::FileKvReader<uint32_t,uint32_t>* reader = new SortReduceUtils::FileKvReader<uint32_t,uint32_t>("",conf);
+		std::tuple<uint32_t,uint32_t,bool> res = reader->Next();
+		while ( std::get<2>(res) ) {
+			uint32_t key = std::get<0>(res);
+			uint32_t val = std::get<1>(res);
+			edge_process->SourceVertex(key,val, true);
+			res = reader->Next();
+
+		}
+		delete reader;
+	}
 
 	exit(0);
 }

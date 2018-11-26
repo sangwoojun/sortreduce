@@ -1,7 +1,7 @@
 #include "VertexValues.h"
 
 template <class K, class V>
-VertexValues<K,V>::VertexValues(std::string temp_directory, K key_count, V default_value, bool(*isactive)(V,V,bool), int thread_count) {
+VertexValues<K,V>::VertexValues(std::string temp_directory, K key_count, V default_value, bool(*isactive)(V,V,bool), V(*finalize)(V,V), int thread_count) {
 
 	std::chrono::high_resolution_clock::time_point start;
 	start = std::chrono::high_resolution_clock::now();
@@ -19,6 +19,7 @@ VertexValues<K,V>::VertexValues(std::string temp_directory, K key_count, V defau
 	m_cur_buffer_write_order = 0;
 
 	mp_is_active = isactive;
+	mp_finalize = finalize;
 	m_default_value = default_value;
 
 	char tmp_filename[128];
@@ -489,8 +490,9 @@ VertexValues<K,V>::WorkerThread(int idx) {
 			ValueItem* pvi = ((ValueItem*)(((uint8_t*)resp_buffer)+internal_offset));
 			ValueItem vi = *pvi;
 			bool is_marked = (vi.iteration == m_cur_iteration);
+			V final_val = mp_finalize(vi.val, kvp.val);
 
-			bool is_active = mp_is_active(vi.val, kvp.val, is_marked);
+			bool is_active = mp_is_active(vi.val, final_val, is_marked);
 
 			//printf( "isactive %lx %lx %s %s\n", vi.val, kvp.val, is_marked?"Y":"N", is_active?"Y":"N" );
 

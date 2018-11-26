@@ -14,7 +14,7 @@ INCFILES=$(wildcard $(INCDIR)/*.h) $(wildcard $(FPGADIR)/*.h)
 
 CFLAGS=-static -Wall -pedantic -lpthread -laio --std=c++11 -pthread -I$(INCDIR) -I$(FPGADIR) $(FPGAFLAG) -march=native -O2 -g
 #-DHW_ACCEL
-SRFLAGS=-DKVTYPES1='uint64_t,uint32_t'  -DKVTYPES2='uint32_t,uint32_t' -DKVTYPES3='uint32_t,float'
+SRFLAGS=-DKVTYPES1='uint64_t,uint32_t'  -DKVTYPES2='uint32_t,uint32_t' -DKVTYPES3='uint32_t,uint64_t'
 
 OUTPUTDIR=./obj
 OBJ=$(patsubst $(SRCDIR)%,$(OUTPUTDIR)%, $(CPPFILES:.cpp=.o))

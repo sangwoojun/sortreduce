@@ -1,4 +1,4 @@
-TARGETS=bfs pr
+TARGETS=bfs pr bc
 
 SORTREDUCE_INCLUDE=../../include/
 SORTREDUCE_LIB=../../obj/

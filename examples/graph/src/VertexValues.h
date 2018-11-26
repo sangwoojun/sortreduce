@@ -24,7 +24,7 @@
 template <class K, class V>
 class VertexValues {
 public:
-	VertexValues(std::string temp_directory, K key_count, V default_value,bool(*isactive)(V,V,bool), int thread_count = 1);
+	VertexValues(std::string temp_directory, K key_count, V default_value,bool(*isactive)(V,V,bool), V(*finalize)(V,V), int thread_count = 1);
 	~VertexValues();
 	void Start();
 	void Finish();
@@ -36,6 +36,7 @@ public:
 private:
 
 	bool (*mp_is_active)(V,V,bool) = NULL;
+	V (*mp_finalize)(V,V) = NULL;
 
 	typedef struct __attribute__ ((__packed__)) {
 		uint32_t iteration;

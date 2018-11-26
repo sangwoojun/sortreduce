@@ -460,9 +460,9 @@ SortReduce<K,V>::ManagerThread() {
 			//merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory, filename);
 			if ( to_sort == 1 ) {
 				//FIXME just write it to file!
-				merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory);
+				merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory, filename);
 			} else {
-				SortReduceReducer::MergeReducer_MultiTree<K,V>* mmerger = new SortReduceReducer::MergeReducer_MultiTree<K,V>(m_config->update, m_config->temporary_directory, 4, ""); // Just so we can use acceleration
+				SortReduceReducer::MergeReducer_MultiTree<K,V>* mmerger = new SortReduceReducer::MergeReducer_MultiTree<K,V>(m_config->update, m_config->temporary_directory, 4, filename); // Just so we can use acceleration
 				if ( mmerger->AcceleratorAvailable() && to_sort > HW_MAXIMUM_SOURCES ) {
 					to_sort = HW_MAXIMUM_SOURCES;
 				} 

@@ -24,7 +24,7 @@ inline uint32_t edge_program(uint32_t vid, uint32_t value, uint32_t fanout) {
 	return vid;
 }
 
-inline uint32_t finalize_program(uint32_t val) {
+inline uint32_t finalize_program(uint32_t oldval, uint32_t val) {
 	return val;
 }
 
@@ -74,7 +74,7 @@ int main(int argc, char** argv) {
 
 	EdgeProcess<uint32_t,uint32_t>* edge_process = new EdgeProcess<uint32_t,uint32_t>(idx_path, mat_path, &edge_program);
 	size_t vertex_count = edge_process->GetVertexCount();
-	VertexValues<uint32_t,uint32_t>* vertex_values = new VertexValues<uint32_t,uint32_t>(tmp_dir, vertex_count, 0xffffffff, &is_active, max_vertexval_thread_count);
+	VertexValues<uint32_t,uint32_t>* vertex_values = new VertexValues<uint32_t,uint32_t>(tmp_dir, vertex_count, 0xffffffff, &is_active, &finalize_program, max_vertexval_thread_count);
 
 
 	int iteration = 0;
@@ -158,7 +158,7 @@ int main(int argc, char** argv) {
 			uint32_t val = std::get<1>(res);
 
 			//printf( "\t\t++ SRR %x %x\n", key, val );
-			while ( !vertex_values->Update(key,finalize_program(val)) ) ;
+			while ( !vertex_values->Update(key,val) ) ;
 
 			res = sr->Next();
 		}

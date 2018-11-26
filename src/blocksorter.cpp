@@ -247,8 +247,8 @@ BlockSorterThread<K,V>::SortKV(void* buffer, size_t bytes, V (*update)(V,V)) {
 			if ( last_kvp.key == c.key ) {
 				last_kvp.val = update(last_kvp.val, c.val);
 			} else {
-				last_kvp = c;
 				tbuffer[out_size++] = last_kvp;
+				last_kvp = c;
 			}
 		}
 		tbuffer[out_size++] = last_kvp;
