@@ -567,7 +567,9 @@ VertexValues<K,V>::WorkerThread(int idx) {
 		m_mutex.unlock();
 	}
 
-	while ( io_getevents(io_ctx, 0, AIO_DEPTH, a_events, NULL) == 0 ) usleep(1000);
+	if ( resp_arg_idx >= 0 ) {
+		while ( io_getevents(io_ctx, 0, AIO_DEPTH, a_events, NULL) == 0 ) usleep(1000);
+	}
 
 
 
