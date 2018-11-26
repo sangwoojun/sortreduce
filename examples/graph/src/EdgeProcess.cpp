@@ -208,7 +208,10 @@ EdgeProcess<K,V>::WorkerThread(int idx) {
 			K key = kvp.key;
 			V val = kvp.val;
 
-			if ( (size_t)key >= vertex_count ) continue;
+			if ( (size_t)key > vertex_count ) {
+				printf( "Skipping key %lu because it's >= %lu\n", (size_t)key, vertex_count );
+				continue;
+			}
 
 			size_t byte_offset = ((size_t)key)*sizeof(uint64_t);
 			if ( byte_offset < idx_buffer_offset || byte_offset + 2*sizeof(uint64_t) > idx_buffer_offset+idx_buffer_bytes ) {

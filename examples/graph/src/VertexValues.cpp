@@ -547,6 +547,18 @@ VertexValues<K,V>::WorkerThread(int idx) {
 		// break when
 		if ( m_kill_threads && q_req->size() == 0 && cur_block_offset_idx == 0 && q_req_kv.empty() && q_write.empty() && aio_inflight == 0 ) break;
 	}
+
+	if ( resp_arg_idx >= 0 ) {
+		int idx = resp_arg_idx;
+		IocbArgs* args = &a_request_args[idx];
+		memset(&a_iocb[idx], 0, sizeof(a_iocb[idx]));
+		io_prep_pwrite(&a_iocb[idx], m_vertex_data_fd, args->buffer, args->bytes, args->offset);
+		args->write = true;
+		a_iocb[idx].data =args;
+		struct iocb* iocbs = &a_iocb[idx];
+		while ( io_submit(io_ctx, 1, &iocbs) <= 0 ) usleep(1000);
+	}
+	
 	if ( active_buffer_idx > 0 ) {
 		//FIXME not in order across vertices... maybe that's okay
 		m_mutex.lock();
@@ -554,6 +566,10 @@ VertexValues<K,V>::WorkerThread(int idx) {
 		active_buffer_idx = 0;
 		m_mutex.unlock();
 	}
+
+	while ( io_getevents(io_ctx, 0, AIO_DEPTH, a_events, NULL) == 0 ) usleep(1000);
+
+
 
 	for ( int i = 0; i < AIO_DEPTH; i++ ) {
 		free(a_request_args[i].buffer);

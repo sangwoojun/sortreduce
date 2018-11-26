@@ -18,10 +18,14 @@
 
 
 
+inline uint32_t vertex_update_add(uint32_t a, uint32_t b) {
+	return a+b;
+}
 inline uint32_t vertex_update(uint32_t a, uint32_t b) {
 	uint32_t ret = a;
 	return ret;
 }
+
 inline uint32_t edge_program(uint32_t vid, uint32_t value, uint32_t fanout) {
 	//printf( "Edge-program source: %x val: %x fanout: %x\n", vid, value, fanout);
 	return vid;
@@ -188,36 +192,77 @@ int main(int argc, char** argv) {
 	printf( "\t\t++ BFS portion Done! %lu ms %d iterations\n", duration_milli.count(), iteration );
 
 	for ( int ri = iteration-1; ri >= 0; ri-- ) {
+
+
+		std::chrono::high_resolution_clock::time_point start;
+		start = std::chrono::high_resolution_clock::now();
+
+		int active_fd = vertex_values->OpenActiveFile(ri);
+		SortReduceUtils::FileKvReader<uint32_t,uint32_t>* active_reader = new SortReduceUtils::FileKvReader<uint32_t,uint32_t>(active_fd);
+		SortReduceTypes::Config<uint32_t,uint32_t>* active_conf =
+			new SortReduceTypes::Config<uint32_t,uint32_t>(tmp_dir, "sorted.sr", max_sr_thread_count);
+		active_conf->quiet = true;
+		active_conf->SetUpdateFunction(&vertex_update);
+		SortReduce<uint32_t,uint32_t>* active_sr = new SortReduce<uint32_t,uint32_t>(active_conf);
+
+		std::tuple<uint32_t,uint32_t,bool> ar = active_reader->Next();
+		while (std::get<2>(ar)) {
+			active_sr->Update(std::get<0>(ar), std::get<1>(ar));
+			ar = active_reader->Next();
+		}
+		active_sr->Finish();
+
+		while ( active_sr->CheckStatus().done_external == false ) {
+			usleep(1000);
+		}
+		delete active_sr;
+		delete active_reader;
+
+		now = std::chrono::high_resolution_clock::now();
+		duration_milli = std::chrono::duration_cast<std::chrono::milliseconds> (now-start);
+		printf( "Sorted active list for iteration %d %lu ms\n", ri, duration_milli.count() );
+
+		start = std::chrono::high_resolution_clock::now();
+
 		char old_filename[128], dst_filename[128];
 		sprintf(old_filename, "reverse%04d.sr", ri+1);
 		sprintf(dst_filename, "reverse%04d.sr", ri);
 
-		int active_fd = vertex_values->OpenActiveFile(ri);
 		BCMergeFlip<uint32_t,uint32_t>* mflip = NULL;
 		if ( ri == iteration-1 ) {
-			mflip = new BCMergeFlip<uint32_t,uint32_t>(tmp_dir, "", active_fd);
+			mflip = new BCMergeFlip<uint32_t,uint32_t>(tmp_dir, "", "sorted.sr");
 		} else {
-			mflip = new BCMergeFlip<uint32_t,uint32_t>(tmp_dir, old_filename, active_fd);
+			mflip = new BCMergeFlip<uint32_t,uint32_t>(tmp_dir, old_filename, "sorted.sr");
 		}
-
-		SortReduceTypes::Config<uint32_t,uint32_t>* conf =
+		SortReduceTypes::Config<uint32_t,uint32_t>* reverse_conf =
 			new SortReduceTypes::Config<uint32_t,uint32_t>(tmp_dir, dst_filename, max_sr_thread_count);
-		conf->quiet = true;
-		conf->SetUpdateFunction(&vertex_update);
+		reverse_conf->quiet = true;
+		reverse_conf->SetUpdateFunction(&vertex_update_add);
+		SortReduce<uint32_t,uint32_t>* reverse_sr = new SortReduce<uint32_t,uint32_t>(reverse_conf);
 
-
-		
-		SortReduceUtils::FileKvReader<uint32_t,uint32_t>* reader = new SortReduceUtils::FileKvReader<uint32_t,uint32_t>("",conf);
-		std::tuple<uint32_t,uint32_t,bool> res = reader->Next();
-		while ( std::get<2>(res) ) {
-			uint32_t key = std::get<0>(res);
-			uint32_t val = std::get<1>(res);
-			edge_process->SourceVertex(key,val, true);
-			res = reader->Next();
-
+		std::tuple<uint32_t,uint32_t,bool> rr = mflip->Next();
+		while ( std::get<2>(rr) ) {
+			uint32_t key = std::get<0>(rr);
+			uint32_t val = std::get<1>(rr);
+			reverse_sr->Update(key,val);
+			rr = mflip->Next();
 		}
-		delete reader;
+		while ( reverse_sr->CheckStatus().done_external == false ) {
+			usleep(1000);
+		}
+
+		delete reverse_sr;
+		delete mflip;
+		
+		now = std::chrono::high_resolution_clock::now();
+		duration_milli = std::chrono::duration_cast<std::chrono::milliseconds> (now-start);
+		printf( "Finished backtrace for iteration %d %lu ms\n", ri, duration_milli.count() );
+
 	}
+
+	now = std::chrono::high_resolution_clock::now();
+	duration_milli = std::chrono::duration_cast<std::chrono::milliseconds> (now-start_all);
+	printf( "\t\t++ BC All Done! %lu ms\n", duration_milli.count() );
 
 	exit(0);
 }

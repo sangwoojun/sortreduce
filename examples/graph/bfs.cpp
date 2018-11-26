@@ -158,7 +158,10 @@ int main(int argc, char** argv) {
 			uint32_t val = std::get<1>(res);
 
 			//printf( "\t\t++ SRR %x %x\n", key, val );
-			while ( !vertex_values->Update(key,val) ) ;
+
+			if ( (size_t)key <= vertex_count ) {
+				while ( !vertex_values->Update(key,val) ) ;
+			}
 
 			res = sr->Next();
 		}
