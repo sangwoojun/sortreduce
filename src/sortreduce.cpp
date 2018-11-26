@@ -457,7 +457,8 @@ SortReduce<K,V>::ManagerThread() {
 				if ( !m_config->quiet ) printf( "SortReduce writing inmem directly to file %s\n", filename.c_str() );
 			}
 			SortReduceReducer::MergeReducer<K,V>* merger = NULL;
-			//merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory, filename);
+			merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory, filename);
+			/*
 			if ( to_sort == 1 ) {
 				//FIXME just write it to file!
 				merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory, filename);
@@ -468,6 +469,7 @@ SortReduce<K,V>::ManagerThread() {
 				} 
 				merger = mmerger;
 			}
+			*/
 
 
 			for ( int i = 0; i < to_sort; i++ ) {

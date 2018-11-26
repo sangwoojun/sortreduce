@@ -1,0 +1,28 @@
+# BigSparse / GraFBoost
+
+External graph analytics platform using the sort-reduce library
+
+More details about the sort-reduce algorithm, as well as its application to graph analytics, can be seen in the paper [GraFBoost: Accelerated Flash Storage for External Graph Analytics](http://people.csail.mit.edu/wjun/papers/isca2018-camera.pdf), and [BigSparse: High-performance external graph analytics](https://arxiv.org/abs/1710.07736)
+
+## Building the software
+
+After the sort-reduce library has been built, simply run **make** to compile the example algorithms, bfs (breadth-first-search), pr (pagerank), and bc (betweenness-centrality)
+
+
+## Caveats in the current version
+
+Translation of the original code to the sort-reduce library is still ongoing, and are hindered by many things...
+BFS works pretty much out-of-the-box, but PR doesn't have active vertex selection implemented (the whole graph is processed every iteration right now), and BC is not yet fully implemented.
+
+## Graph file format
+
+This software expects a graph to be a binary sparse compressed column format. 
+
+A graph consists of two files: an index file and a matrix file.
+
+For a graph with **V** vertices, the index file consists of **V+1** 64 bit values.
+Each i'th value corresponds to the byte offset of the vertex i's outbound edge data, stored in the matrix file.
+So if i'th value is 8 and (i+1)'st value is 16, bytes [8,16) contain the outbound edge data of the graph.
+
+The outbound edge data can either be a sequence of destination vertex IDs, or a pair of ID, weights. 
+The provided examples expects a sequence of 4 byte destination vertex IDs, so in the above example, [8,16) bytes will contain two destination vertex IDs.

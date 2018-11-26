@@ -43,6 +43,7 @@ private:
 		V val;
 	} ValueItem;
 	
+	/*
 	//typedef struct __attribute__ ((__packed__)) {
 	typedef struct {
 		uint32_t iteration;
@@ -52,6 +53,7 @@ private:
 	} ValueCacheItem;
 	ValueCacheItem* ma_value_cache;
 	static const size_t m_value_cache_size = (1024*1024*32);
+	*/
 
 	V m_default_value;
 
@@ -62,7 +64,7 @@ private:
 	size_t m_io_buffer_offset = 0;
 	size_t m_io_buffer_bytes = 0;
 	bool m_io_buffer_dirty = false;
-	static const size_t m_io_buffer_alloc_items = 1024*8;
+	static const size_t m_io_buffer_alloc_items = 1024*4;
 	static const size_t m_io_buffer_alloc_size = (m_io_buffer_alloc_items*sizeof(ValueItem));
 	static const size_t m_write_buffer_alloc_size = 1024*1024*32;
 
