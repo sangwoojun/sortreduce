@@ -196,7 +196,7 @@ int main(int argc, char** argv) {
 		delete sr;
 
 		//if ( iteration > 20 ) break;
-		if ( iteration > 1 ) break;
+		if ( iteration >= 1 ) break;
 	}
 	now = std::chrono::high_resolution_clock::now();
 	duration_milli = std::chrono::duration_cast<std::chrono::milliseconds> (now-start_all);
