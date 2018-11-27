@@ -330,7 +330,7 @@ template <class K, class V>
 void
 VertexValues<K,V>::WorkerThread(int idx) {
 
-	printf( "VertexValues::WorkerThread spawned %d\n", idx ); fflush(stdout);
+	//printf( "VertexValues::WorkerThread spawned %d\n", idx ); fflush(stdout);
 	io_context_t io_ctx;
 	struct io_event a_events[AIO_DEPTH];
 	struct iocb a_iocb[AIO_DEPTH];
@@ -578,13 +578,7 @@ VertexValues<K,V>::WorkerThread(int idx) {
 	}
 	free(p_active_buffer);
 
-	printf( "VertexValues WorkerThread done %d\n", idx );
-
-
-	
-
-
-
+	//printf( "VertexValues WorkerThread done %d\n", idx );
 
 
 	io_destroy(io_ctx);

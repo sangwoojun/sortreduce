@@ -1034,7 +1034,7 @@ SortReduceReducer::MergerNode<K,V>::Start() {
 template <class K, class V>
 void
 SortReduceReducer::MergerNode<K,V>::WorkerThread2() {
-	uint32_t rid = rand();
+	//uint32_t rid = rand();
 	//printf( "MergerNode WorkerThread2 started! %x\n", rid ); fflush(stdout);
 
 

@@ -191,7 +191,9 @@ int main(int argc, char** argv) {
 	duration_milli = std::chrono::duration_cast<std::chrono::milliseconds> (now-start_all);
 	printf( "\t\t++ BFS portion Done! %lu ms %d iterations\n", duration_milli.count(), iteration );
 
-	for ( int ri = iteration-1; ri >= 0; ri-- ) {
+
+	size_t last_file_bytes = 0;
+	for ( int ri = iteration-2; ri >= 0; ri-- ) { // iteration-1 has nothing because it has no active vertices
 
 
 		std::chrono::high_resolution_clock::time_point start;
@@ -215,6 +217,7 @@ int main(int argc, char** argv) {
 		while ( active_sr->CheckStatus().done_external == false ) {
 			usleep(1000);
 		}
+		size_t result_bytes = active_sr->CheckStatus().done_file->bytes;
 		delete active_sr;
 		delete active_reader;
 
@@ -228,11 +231,14 @@ int main(int argc, char** argv) {
 		sprintf(old_filename, "reverse%04d.sr", ri+1);
 		sprintf(dst_filename, "reverse%04d.sr", ri);
 
+		//TODO give file size... sr results have padding "result_bytes"
 		BCMergeFlip<uint32_t,uint32_t>* mflip = NULL;
 		if ( ri == iteration-1 ) {
-			mflip = new BCMergeFlip<uint32_t,uint32_t>(tmp_dir, "", "sorted.sr");
+			mflip = new BCMergeFlip<uint32_t,uint32_t>(tmp_dir, "", last_file_bytes, "sorted.sr", result_bytes);
+			printf ( "Reversing single file of size %lu\n", result_bytes );
 		} else {
-			mflip = new BCMergeFlip<uint32_t,uint32_t>(tmp_dir, old_filename, "sorted.sr");
+			mflip = new BCMergeFlip<uint32_t,uint32_t>(tmp_dir, old_filename, last_file_bytes, "sorted.sr", result_bytes);
+			printf ( "Reversing two files of size %lu, %lu\n", last_file_bytes, result_bytes );
 		}
 		SortReduceTypes::Config<uint32_t,uint32_t>* reverse_conf =
 			new SortReduceTypes::Config<uint32_t,uint32_t>(tmp_dir, dst_filename, max_sr_thread_count);
@@ -240,13 +246,18 @@ int main(int argc, char** argv) {
 		reverse_conf->SetUpdateFunction(&vertex_update_add);
 		SortReduce<uint32_t,uint32_t>* reverse_sr = new SortReduce<uint32_t,uint32_t>(reverse_conf);
 
+		size_t rev_count = 0;
 		std::tuple<uint32_t,uint32_t,bool> rr = mflip->Next();
 		while ( std::get<2>(rr) ) {
 			uint32_t key = std::get<0>(rr);
 			uint32_t val = std::get<1>(rr);
+
 			reverse_sr->Update(key,val);
 			rr = mflip->Next();
+			rev_count++;
 		}
+		//printf( "reverse_sr given %lu kvps\n", rev_count );
+		reverse_sr->Finish();
 		while ( reverse_sr->CheckStatus().done_external == false ) {
 			usleep(1000);
 		}
@@ -258,11 +269,13 @@ int main(int argc, char** argv) {
 		duration_milli = std::chrono::duration_cast<std::chrono::milliseconds> (now-start);
 		printf( "Finished backtrace for iteration %d %lu ms\n", ri, duration_milli.count() );
 
+		last_file_bytes = result_bytes;
 	}
 
 	now = std::chrono::high_resolution_clock::now();
 	duration_milli = std::chrono::duration_cast<std::chrono::milliseconds> (now-start_all);
 	printf( "\t\t++ BC All Done! %lu ms\n", duration_milli.count() );
+	printf( "BC results are stored in file reverse0000.sr\n" );
 
 	exit(0);
 }

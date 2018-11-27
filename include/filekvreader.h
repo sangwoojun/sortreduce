@@ -14,13 +14,13 @@ namespace SortReduceUtils {
 	class FileKvReader {
 	public:
 		FileKvReader(SortReduceTypes::File* file, SortReduceTypes::Config<K,V>* config);
-		FileKvReader(std::string filename, SortReduceTypes::Config<K,V>* config);
-		FileKvReader(int fd);
+		FileKvReader(std::string filename, SortReduceTypes::Config<K,V>* config, size_t bytes = 0);
+		FileKvReader(int fd, size_t bytes = 0);
 		~FileKvReader();
 
 		void Rewind();
 		void Seek(size_t idx);
-		std::tuple<K,V, bool> Next();
+		std::tuple<K,V, bool> Next(bool advance = true);
 
 		typedef struct __attribute__ ((__packed__)) {K key; V val;} KvPair;
 

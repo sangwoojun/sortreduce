@@ -15,10 +15,15 @@ SortReduceUtils::FileKvReader<K,V>::FileKvReader(SortReduceTypes::File* file, So
 	m_last_key = 0;
 }
 template <class K, class V>
-SortReduceUtils::FileKvReader<K,V>::FileKvReader(std::string filename, SortReduceTypes::Config<K,V>* config) {
+SortReduceUtils::FileKvReader<K,V>::FileKvReader(std::string filename, SortReduceTypes::Config<K,V>* config, size_t bytes) {
 	this->m_offset = 0;
 	this->m_fd = open((config->temporary_directory+"/"+filename).c_str(), O_RDONLY, S_IRUSR|S_IWUSR);
-	this->m_file_size = lseek(m_fd, 0, SEEK_END);
+
+	if ( bytes > 0 ) {
+		this->m_file_size = bytes;
+	} else {
+		this->m_file_size = lseek(m_fd, 0, SEEK_END);
+	}
 	printf( "Loading file %s size %lu\n", filename.c_str(), m_file_size ); fflush(stdout);
 	
 	m_buffer_offset = 0;
@@ -28,10 +33,14 @@ SortReduceUtils::FileKvReader<K,V>::FileKvReader(std::string filename, SortReduc
 }
 
 template <class K, class V>
-SortReduceUtils::FileKvReader<K,V>::FileKvReader(int fd) {
+SortReduceUtils::FileKvReader<K,V>::FileKvReader(int fd, size_t bytes) {
 	this->m_offset = 0;
 	this->m_fd = fd;
-	this->m_file_size = lseek(m_fd, 0, SEEK_END);
+	if ( bytes > 0 ) {
+		this->m_file_size = bytes;
+	} else {
+		this->m_file_size = lseek(m_fd, 0, SEEK_END);
+	}
 	printf( "Loading file fd %d size %lu\n", fd,  m_file_size ); fflush(stdout);
 	
 	m_buffer_offset = 0;
@@ -62,7 +71,7 @@ SortReduceUtils::FileKvReader<K,V>::Seek(size_t idx) {
 
 template <class K, class V>
 inline std::tuple<K,V, bool> 
-SortReduceUtils::FileKvReader<K,V>::Next() {
+SortReduceUtils::FileKvReader<K,V>::Next(bool advance) {
 	if ( m_offset + sizeof(K)+sizeof(V) > m_file_size ) return std::make_tuple(0,0,false);
 
 	if ( m_offset < m_buffer_offset || m_offset+sizeof(K)+sizeof(V) > m_buffer_offset+m_buffer_bytes ) {
@@ -74,7 +83,7 @@ SortReduceUtils::FileKvReader<K,V>::Next() {
 	size_t internal_offset = m_offset - m_buffer_offset;
 	K key = *((K*)(((uint8_t*)mp_read_buffer)+internal_offset));
 	V val = *((V*)(((uint8_t*)mp_read_buffer)+internal_offset+sizeof(K)));
-	m_offset += sizeof(K)+sizeof(V);
+	if ( advance ) m_offset += sizeof(K)+sizeof(V);
 
 /*
 	if ( key < m_last_key ) {

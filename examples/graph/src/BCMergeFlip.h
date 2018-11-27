@@ -11,7 +11,7 @@
 template <class K, class V>
 class BCMergeFlip {
 public:
-	BCMergeFlip(std::string dir, std::string old_name, std::string toflip_name);
+	BCMergeFlip(std::string dir, std::string old_name, size_t old_bytes, std::string toflip_name, size_t toflip_bytes);
 	~BCMergeFlip();
 	std::tuple<V,K,bool> Next();
 
