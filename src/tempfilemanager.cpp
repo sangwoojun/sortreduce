@@ -141,6 +141,11 @@ TempFileManager::Read(SortReduceTypes::File* file, size_t offset, size_t bytes, 
 
 	int fd = file->fd;
 
+	if ( fd < 0 ) {
+		fd = open(file->path.c_str(), O_RDONLY|O_DIRECT, S_IRUSR|S_IWUSR);
+		file->fd = fd;
+	}
+
 	CheckDone();
 	
 	m_mutex.lock();

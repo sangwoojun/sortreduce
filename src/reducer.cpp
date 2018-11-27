@@ -74,6 +74,9 @@ SortReduceReducer::FileWriterNode<K,V>::EmitFlush() {
 	m_out_offset = 0;
 
 	while (this->mp_temp_file_manager->CountInFlight() > 0 ) this->mp_temp_file_manager->CheckDone();
+
+	close(m_out_file->fd);
+	m_out_file->fd = -1;
 }
 
 template <class K, class V>
