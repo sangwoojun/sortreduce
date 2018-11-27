@@ -9,10 +9,16 @@ More details about the sort-reduce algorithm, as well as its application to grap
 After the sort-reduce library has been built, simply run **make** to compile the example algorithms, bfs (breadth-first-search), pr (pagerank), and bc (betweenness-centrality)
 
 
+## Running
+
+It is *imperative* that ulimit -n is changed to a very large number (4194304 or such..).
+Otherwise execution hangs after creating 1024 files.
+
 ## Caveats in the current version
 
-Translation of the original code to the sort-reduce library is still ongoing, and are hindered by many things...
-BFS works pretty much out-of-the-box, but PR doesn't have active vertex selection implemented (the whole graph is processed every iteration right now), and BC is not yet fully implemented.
+PR doesn't have active vertex selection implemented (the whole graph is processed every iteration right now).
+There is no reason active vertex selection cannot be done using sort-reduce (It is mentioned in the paper), but that requires an additional row-compressed graph file which I have not created yet.
+In order to do performance comparisons, PR should only be run for 1 iteration.
 
 ## Graph file format
 
