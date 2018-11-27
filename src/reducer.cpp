@@ -166,6 +166,9 @@ SortReduceReducer::StreamFileWriterNode<K,V>::EmitFlush() {
 	m_out_offset = 0;
 
 	while (this->mp_temp_file_manager->CountInFlight() > 0 ) this->mp_temp_file_manager->CheckDone();
+	
+	close(m_out_file->fd);
+	m_out_file->fd = -1;
 }
 
 SortReduceReducer::StreamFileReader::StreamFileReader(std::string temp_directory, bool verbose) {
