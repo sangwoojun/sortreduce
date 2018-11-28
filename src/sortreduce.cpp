@@ -495,7 +495,7 @@ SortReduce<K,V>::ManagerThread() {
 				//printf( "File size %lx %lx\n", fsize, reduced_file->bytes );
 				if ( !m_config->quiet ) printf( "Pushed sort-reduced file ( size %lu ) -> %lu\n", reduced_file->bytes, m_file_priority_queue.size() );
 				//printf( "from_mem erased %d\n", mv_stream_mergers_from_mem.size() );
-				fflush(stdout);
+				//fflush(stdout);
 
 				mv_stream_mergers_from_mem.erase(mv_stream_mergers_from_mem.begin() + i);
 				delete reducer;

@@ -75,6 +75,8 @@ SortReduceReducer::FileWriterNode<K,V>::EmitFlush() {
 
 	while (this->mp_temp_file_manager->CountInFlight() > 0 ) this->mp_temp_file_manager->CheckDone();
 
+	printf( "cloding fd %d\n", m_out_file->fd);
+
 	close(m_out_file->fd);
 	m_out_file->fd = -1;
 }
@@ -167,8 +169,11 @@ SortReduceReducer::StreamFileWriterNode<K,V>::EmitFlush() {
 
 	while (this->mp_temp_file_manager->CountInFlight() > 0 ) this->mp_temp_file_manager->CheckDone();
 	
+	printf( "cloding fd %d\n", m_out_file->fd);
+
 	close(m_out_file->fd);
 	m_out_file->fd = -1;
+
 }
 
 SortReduceReducer::StreamFileReader::StreamFileReader(std::string temp_directory, bool verbose) {
@@ -473,6 +478,9 @@ SortReduceReducer::StreamMergeReducer<K,V>::EmitFlush() {
 	m_out_file_offset += m_out_block.valid_bytes;
 
 	while (this->mp_temp_file_manager->CountInFlight() > 0 ) this->mp_temp_file_manager->CheckDone();
+	
+	close(m_out_file->fd);
+	m_out_file->fd = -1;
 }
 
 template <class K, class V>
