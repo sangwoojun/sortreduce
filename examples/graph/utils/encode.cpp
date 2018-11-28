@@ -132,6 +132,9 @@ int main(int argc, char** argv) {
 		}
 
 	}
+	// add one more index entry to specify the end of the last vertex
+	fwrite(&cur_boff, sizeof(uint64_t), 1, fidx);
+	//cur_node++;
 	printf("Total edges: %ld\n", total_edges);
 	printf("Isolated nodes: %ld\n", nodes_noedge);
 	fclose(fidx);

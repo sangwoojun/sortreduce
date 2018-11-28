@@ -26,3 +26,16 @@ So if i'th value is 8 and (i+1)'st value is 16, bytes [8,16) contain the outboun
 
 The outbound edge data can either be a sequence of destination vertex IDs, or a pair of ID, weights. 
 The provided examples expects a sequence of 4 byte destination vertex IDs, so in the above example, [8,16) bytes will contain two destination vertex IDs.
+
+### Encoding graphs
+
+*utils/encode* takes as input a text-encoded graph file consisting of source-destination pairs, and creates the index and matrix files required by this program.
+Such text-encoded graph files include the famous [twitter dataset](http://an.kaist.ac.kr/traces/WWW2010.html).
+
+*encode* takes as input the input filename, whether the vertex ids should be encoded in 32 or 64 bit format, and whether the input is a text file.
+In order to encode input.txt, using 32 bit vertex IDs, run the following command:
+
+```sh
+$ ./encode input.txt Y Y # First Y is for 32 bits? and second Y is for text input?
+```
+
