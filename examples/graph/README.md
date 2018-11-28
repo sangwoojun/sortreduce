@@ -8,12 +8,6 @@ More details about the sort-reduce algorithm, as well as its application to grap
 
 After the sort-reduce library has been built, simply run **make** to compile the example algorithms, bfs (breadth-first-search), pr (pagerank), and bc (betweenness-centrality)
 
-
-## Running
-
-It is *imperative* that ulimit -n is changed to a very large number (4194304 or such..).
-Otherwise execution hangs after creating 1024 files.
-
 ## Caveats in the current version
 
 PR doesn't have active vertex selection implemented (the whole graph is processed every iteration right now).
