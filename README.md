@@ -47,18 +47,14 @@ For example, for 64-bit keys and 32-bit values, the library can be instantiated 
 ```
 SortReduceTypes::Config<uint64_t,uint32_t>* conf = new SortReduceTypes::Config<uint64_t,uint32_t>("/mnt/ssd0/scratch/", "output.dat", 16);
 conf->SetUpdateFunction(&update_function);
-conf->SetManagedBufferSize(1024*1024*32, 64); // 4 GB
+
 
 SortReduce<uint64_t,uint32_t>* sr = new SortReduce<uint64_t,uint32_t>(conf);
 ```
 
 The above code uses "/mnt/ssd0/scratch/" for temporary and output directories, allows up to 16 threads to be used, and stores the sort-reduced array at "/mnt/ssd0/scratch/output.dat".
-The user-defined update function is given as update_function, and assigns 4 GB of memory (64x 32 MB blocks).
-Block size will be automatically adjusted in the future. For now, 32 MB is a good number.
+The user-defined update function is given as update_function.
 
-If the output filename is set to "", the library will not create a named file.
-Instead, the sort-reduce results can be streamed out directly without having to be written to storage first, improving performance.
-If you do not require an explicit result file to exist in storage, using an empty string as the output filename can be a better solution, like the following:
 
 ```
 SortReduceTypes::Config<uint64_t,uint32_t>* conf = new SortReduceTypes::Config<uint64_t,uint32_t>("/mnt/ssd0/scratch/", "", 16);
@@ -102,20 +98,17 @@ std::tuple<uint64_t,uint32_t,bool> kvp = sr->Next();
 while ( std::get<2>(kvp) ) {
 	uint64_t key = std::get<0>(kvp);
 	uint32_t val = std::get<1>(kvp);
+	kvp = sr->Next();
 }
 ```
 
 
-### Building
+### Building user software
 
 See example makefiles in examples/simple
 
-### Memory allocation
-
-### Thread allocation
-
 ### Multi-thread ingestion
 
-### More types
+See example makefiles in examples/multi
 
 ## Implementation details
