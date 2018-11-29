@@ -217,7 +217,6 @@ SortReduce<K,V>::ManagerThread() {
 
 	const size_t reducer_from_mem_fan_in = 32;
 	const size_t reducer_from_mem_fan_in_max = 128;
-	const size_t reducer_from_storage_fan_in_max = 32;
 	int reducer_from_mem_max_count = 1;
 	
 	std::chrono::high_resolution_clock::time_point last_time;
@@ -246,7 +245,7 @@ SortReduce<K,V>::ManagerThread() {
 	}
 	if ( max_storage_bytes == 0 && fs_avail_bytes > 0 ) max_storage_bytes = fs_avail_bytes;
 
-	while ( mp_block_sorter->GetThreadCount() < m_maximum_threads - 3 ) {
+	while ( mp_block_sorter->GetThreadCount() < (size_t)m_maximum_threads - 3 ) {
 		mp_block_sorter->SpawnThread();
 	}
 
@@ -318,10 +317,11 @@ SortReduce<K,V>::ManagerThread() {
 
 		if ( m_reduce_phase == false && m_file_priority_queue.size() > 0 ) {
 			//FIXME
-			size_t required_space_safe = m_file_priority_queue.top()->bytes*reducer_from_storage_fan_in_max;
-			if ( m_file_priority_queue.size() <= reducer_from_storage_fan_in_max ) {
-				required_space_safe = cur_storage_total_bytes;
-			}
+			size_t required_space_safe = cur_storage_total_bytes*1.1;
+			//size_t required_space_safe = m_file_priority_queue.top()->bytes*reducer_from_storage_fan_in_max;
+			//if ( m_file_priority_queue.size() <= reducer_from_storage_fan_in_max ) {
+				//required_space_safe = cur_storage_total_bytes;
+			//}
 			if ( !m_done_inmem && max_storage_bytes - cur_storage_total_bytes < required_space_safe ) {
 				if ( !m_config->quiet ) printf( "SortReduce entering reduce phase due to lack of storage %lu\n", max_storage_bytes - cur_storage_total_bytes );
 				m_reduce_phase = true;
