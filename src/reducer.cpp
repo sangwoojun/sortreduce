@@ -75,8 +75,6 @@ SortReduceReducer::FileWriterNode<K,V>::EmitFlush() {
 
 	while (this->mp_temp_file_manager->CountInFlight() > 0 ) this->mp_temp_file_manager->CheckDone();
 
-	printf( "cloding fd %d\n", m_out_file->fd);
-
 	close(m_out_file->fd);
 	m_out_file->fd = -1;
 }
@@ -169,8 +167,6 @@ SortReduceReducer::StreamFileWriterNode<K,V>::EmitFlush() {
 
 	while (this->mp_temp_file_manager->CountInFlight() > 0 ) this->mp_temp_file_manager->CheckDone();
 	
-	printf( "cloding fd %d\n", m_out_file->fd);
-
 	close(m_out_file->fd);
 	m_out_file->fd = -1;
 
@@ -938,9 +934,9 @@ inline bool
 SortReduceReducer::BlockKvReader<K,V>::IsEmpty() {
 	// The ordering REQUIRES valid_bytes of .last blocks are 0
 
-	if ( m_offset < m_cur_block.valid_bytes ) return false;
 	if ( m_done == true ) return true;
 	if ( m_cur_block.last ) return true;
+	if ( m_offset < m_cur_block.valid_bytes ) return false;
 
 	if ( m_offset >= m_cur_block.valid_bytes ) {
 		m_offset = 0;
@@ -1322,6 +1318,7 @@ template <class K, class V>
 void
 SortReduceReducer::ReducerNodeStream<K,V>::SetSource( BlockSource<K,V>* src) {
 	mp_src = src;
+	mp_reader = new BlockKvReader<K,V>(mp_src);
 	m_worker_thread = std::thread(&ReducerNodeStream::WorkerThread,this);
 }
 
@@ -1342,25 +1339,19 @@ SortReduceReducer::ReducerNodeStream<K,V>::IsDone() {
 template <class K, class V>
 void
 SortReduceReducer::ReducerNodeStream<K,V>::WorkerThread() {
-	size_t in_off = 0;
-	SortReduceTypes::Block in_block;
 
-	while ( in_block.valid == false && !m_kill ) {
-		in_block = mp_src->GetBlock();
-	}
-	
 	SortReduceTypes::KvPair<K,V> last_kvp = {0};
 
 	uint64_t cnt = 0;
 	uint64_t rcnt = 0;
 
 	bool ignore_rest = false;
-	if (!in_block.last) {
-		last_kvp = ReducerUtils<K,V>::DecodeKvPair(&in_block, &in_off, mp_src, &m_kill);
+	if (!mp_reader->IsEmpty()) {
+		last_kvp = mp_reader->GetNext();
 		rcnt++;
 	
-		while (in_block.last == false && !m_kill) {
-			SortReduceTypes::KvPair<K,V> kvp = ReducerUtils<K,V>::DecodeKvPair(&in_block, &in_off, mp_src, &m_kill);
+		while (!mp_reader->IsEmpty() && !m_kill) {
+			SortReduceTypes::KvPair<K,V> kvp = mp_reader->GetNext();
 			rcnt++;
 			if ( kvp.key == last_kvp.key ) {
 				last_kvp.val = mp_update(last_kvp.val, kvp.val);
@@ -1381,14 +1372,14 @@ SortReduceReducer::ReducerNodeStream<K,V>::WorkerThread() {
 		}
 		if ( !ignore_rest ) {
 			this->EmitKvPair(last_kvp.key, last_kvp.val);
+			cnt++;
 		}
-		cnt++;
 	}
 
-	mp_src->ReturnBlock(in_block);
 	this->FinishEmit();
+	
+	printf( "ReducerNode read %ld emitted %ld -- %ld\n", rcnt, cnt );
 
-	printf( "ReducerNode read %ld emitted %ld\n", rcnt, cnt );
 
 	m_done = true;
 }
@@ -1396,57 +1387,39 @@ SortReduceReducer::ReducerNodeStream<K,V>::WorkerThread() {
 
 template <class K, class V>
 SortReduceReducer::BlockSourceReader<K,V>::BlockSourceReader() {
-	mp_src = NULL;
 	m_done = false;
 	m_kill = false;
-
-	m_offset = 0;
-	m_block.valid = false;
 }
 template <class K, class V>
 SortReduceReducer::BlockSourceReader<K,V>::BlockSourceReader(BlockSource<K,V>* src) {
-	mp_src = src;
 	m_done = false;
 	m_kill = false;
 
-	m_offset = 0;
-	m_block = src->GetBlock();
-	while (m_block.valid == false) {
-		m_block = src->GetBlock();
-	}
+	mp_reader = new BlockKvReader<K,V>(src);
 }
 
 template <class K, class V>
 void
 SortReduceReducer::BlockSourceReader<K,V>::AddSource(BlockSource<K,V>* src) {
-	mp_src = src;
-	
-	m_block = src->GetBlock();
-	while (m_block.valid == false) {
-		m_block = src->GetBlock();
-	}
+	mp_reader = new BlockKvReader<K,V>(src);
 }
 
 template <class K, class V>
 inline SortReduceTypes::KvPair<K,V>
 SortReduceReducer::BlockSourceReader<K,V>::GetNext() {
 	SortReduceTypes::KvPair<K,V> kvp = {0};
-	
-	while (m_block.valid == false) {
-		m_block = mp_src->GetBlock();
+		
+	if ( !mp_reader->IsEmpty() ) {
+		kvp = mp_reader->GetNext();
 	}
 
-	if ( !m_block.last ) {
-		kvp = ReducerUtils<K,V>::DecodeKvPair(&m_block, &m_offset, mp_src, &m_kill);
-	}
 	return kvp;
 }
 
 template <class K, class V>
 inline bool
 SortReduceReducer::BlockSourceReader<K,V>::Empty() {
-	if ( m_block.last ) m_done = true;
-	return m_done;
+	return mp_reader->IsEmpty();
 }
 
 

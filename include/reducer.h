@@ -224,6 +224,7 @@ namespace SortReduceReducer {
 		bool IsDone();
 	private:
 		BlockSource<K,V>* mp_src;
+		BlockKvReader<K,V>* mp_reader;
 
 		std::thread m_worker_thread;
 		void WorkerThread();
@@ -242,12 +243,9 @@ namespace SortReduceReducer {
 		SortReduceTypes::KvPair<K,V> GetNext();
 		bool Empty();
 	private:
-		BlockSource<K,V>* mp_src;
 		bool m_done;
 		bool m_kill;
-
-		SortReduceTypes::Block m_block;
-		size_t m_offset;
+		BlockKvReader<K,V>* mp_reader;
 	};
 
 	template <class K, class V>

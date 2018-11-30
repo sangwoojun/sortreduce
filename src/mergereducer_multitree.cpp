@@ -169,7 +169,7 @@ SortReduceReducer::MergeReducer_MultiTree<K,V>::Start() {
 
 				mv_tree_nodes_seq.push_back(merger);
 			} else {
-				for ( int i = 0; i < cur_level_count/2; i++ ) {
+				for ( int i = 0; i < (cur_level_count)/2; i++ ) {
 					MergerNode<K,V>* merger = new MergerNode<K,V>(1024*1024*4, 4, cur_level);
 					merger->AddSource(mvv_tree_nodes[cur_level][i*2]);
 					merger->AddSource(mvv_tree_nodes[cur_level][i*2+1]);
@@ -192,7 +192,7 @@ SortReduceReducer::MergeReducer_MultiTree<K,V>::Start() {
 	BlockSource<K,V>* root = mvv_tree_nodes[cur_level][0];
 	if ( m_temp_directory == "" ) {
 		if ( !accelerate ) {
-			mp_reducer_node_stream = new ReducerNodeStream<K,V>(mp_update, 1024*1024, 4);
+			mp_reducer_node_stream = new ReducerNodeStream<K,V>(mp_update, 1024*1024*4, 4);
 			mp_reducer_node_stream->SetSource(root);
 			root = mp_reducer_node_stream;
 			m_thread_count ++;

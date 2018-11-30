@@ -1,5 +1,6 @@
 #include "BCMergeFlip.h"
 
+/*
 template <class K, class V>
 BCMergeFlip<K,V>::BCMergeFlip(std::string dir, std::string old_name, size_t old_bytes, std::string toflip_name, size_t toflip_bytes ) {
 	m_old_fd = open((dir+"/"+old_name).c_str(), O_RDONLY, S_IRUSR|S_IWUSR);
@@ -17,10 +18,31 @@ BCMergeFlip<K,V>::BCMergeFlip(std::string dir, std::string old_name, size_t old_
 	//cur_old_val = std::make_tuple(0,0,false);
 	//cur_toflip_val = std::make_tuple(0,0,false);
 }
+*/
+
+template <class K, class V>
+BCMergeFlip<K,V>::BCMergeFlip(std::string dir, std::string old_name, size_t old_bytes, SortReduce<K,V>* sr_result ) {
+	m_old_fd = open((dir+"/"+old_name).c_str(), O_RDONLY, S_IRUSR|S_IWUSR);
+	//m_toflip_fd = open((dir+"/"+toflip_name).c_str(), O_RDONLY, S_IRUSR|S_IWUSR);
+
+	if ( m_old_fd < 0 ) {
+		mp_old_reader = NULL;
+	} else {
+		mp_old_reader = new SortReduceUtils::FileKvReader<V,K>(m_old_fd, old_bytes);
+		cur_buffered_val = mp_old_reader->Next();
+	}
+	//mp_toflip_reader = new SortReduceUtils::FileKvReader<K,V>(m_toflip_fd, toflip_bytes);
+	mp_sr_result = sr_result;
+	cur_toflip_val = mp_sr_result->Next();
+
+
+	//cur_old_val = std::make_tuple(0,0,false);
+	//cur_toflip_val = std::make_tuple(0,0,false);
+}
 
 template <class K, class V>
 BCMergeFlip<K,V>::~BCMergeFlip() {
-	delete mp_toflip_reader;
+	//delete mp_toflip_reader;
 	if ( mp_old_reader != NULL ) {
 		delete mp_old_reader;
 	}
@@ -33,22 +55,24 @@ BCMergeFlip<K,V>::Next() {
 
 	if ( mp_old_reader != NULL ) {
 		if ( std::get<2>(cur_buffered_val) ) {
-			std::tuple<K,V, bool> ret = mp_toflip_reader->Next(false);
+			std::tuple<K,V, bool> cv = cur_toflip_val;
+			//std::tuple<K,V, bool> ret = mp_toflip_reader->Next(false);
 
-			if (std::get<2>(ret) == false ) {
+			if (std::get<2>(cv) == false ) {
 				std::tuple<V,K, bool> rold = cur_buffered_val;
 				cur_buffered_val = mp_old_reader->Next();
 
 				return rold;
-			} else if (std::get<0>(ret) == std::get<0>(cur_buffered_val)) {
+			} else if (std::get<0>(cv) == std::get<0>(cur_buffered_val)) {
 				std::tuple<V,K,bool> rold = cur_buffered_val;
 
 				// commented so that cur_buffered_val also gets returned next call
 				//cur_buffered_val = mp_old_reader->Next();
 
-				ret = mp_toflip_reader->Next(true); // get the data again, advancing the pointer this time
+				//cur_toflip_val = mp_toflip_reader->Next(); // get the data again, advancing the pointer this time
+				cur_toflip_val = mp_sr_result->Next();
 				return std::make_tuple(std::get<1>(ret), std::get<1>(rold), true);
-			} else if ( std::get<0>(ret) > std::get<1>(cur_buffered_val) ) { // old first
+			} else if ( std::get<0>(cv) > std::get<1>(cur_buffered_val) ) { // old first
 				std::tuple<V,K, bool> rold = cur_buffered_val;
 				cur_buffered_val = mp_old_reader->Next();
 
@@ -57,15 +81,18 @@ BCMergeFlip<K,V>::Next() {
 				//std::tuple<K,V, bool> tf = mp_toflip_reader->Next();
 				//return std::make_tuple(std::get<1>(tf),1,std::get<2>(tf));
 
-				ret = mp_toflip_reader->Next(true); // get the data again, advancing the pointer this time
-				return std::make_tuple(std::get<1>(ret),1,std::get<2>(ret));
+				//cur_toflip_val = mp_toflip_reader->Next(); // get the data again, advancing the pointer this time
+				cur_toflip_val = mp_sr_result->Next();
+				return std::make_tuple(std::get<1>(cv),1,std::get<2>(cv));
 			}
 		} else {
-			std::tuple<K,V, bool> tf = mp_toflip_reader->Next();
+			std::tuple<K,V, bool> tf = cur_toflip_val;
+			cur_toflip_val = mp_sr_result->Next();
 			return std::make_tuple(std::get<1>(tf),1,std::get<2>(tf));
 		}
 	} else {
-		std::tuple<K,V, bool> tf = mp_toflip_reader->Next();
+		std::tuple<K,V, bool> tf = cur_toflip_val;
+		cur_toflip_val = mp_sr_result->Next();
 		if ( std::get<2>(tf) ) {
 			V val = std::get<1>(tf);
 			return std::make_tuple(val,1,true);

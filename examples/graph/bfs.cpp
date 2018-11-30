@@ -79,11 +79,11 @@ int main(int argc, char** argv) {
 
 	int iteration = 0;
 	while ( true ) {
-		char filename[128];
-		sprintf(filename, "out%04d.sr", iteration);
+		//char filename[128];
+		//sprintf(filename, "out%04d.sr", iteration);
 
 		SortReduceTypes::Config<uint32_t,uint32_t>* conf =
-			new SortReduceTypes::Config<uint32_t,uint32_t>(tmp_dir, filename, max_sr_thread_count);
+			new SortReduceTypes::Config<uint32_t,uint32_t>(tmp_dir, "", max_sr_thread_count);
 		conf->quiet = true;
 		conf->SetUpdateFunction(&vertex_update);
 

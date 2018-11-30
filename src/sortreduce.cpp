@@ -59,6 +59,13 @@ SortReduce<K,V>::~SortReduce() {
 	delete mp_block_sorter;
 	//printf( "mp_block_sorter deleted\n" ); fflush(stdout);
 
+	while ( !mq_delayed_dete_mergereducer.empty() ) {
+		SortReduceReducer::MergeReducer<K,V>* reducer = mq_delayed_dete_mergereducer.front();
+		mq_delayed_dete_mergereducer.pop();
+
+		delete reducer;
+	}
+
 }
 
 template <class K, class V>
@@ -93,9 +100,11 @@ SortReduce<K,V>::CheckStatus() {
 
 	if ( m_done_external ) {
 		if ( m_file_priority_queue.size() != 1 ) {
-			fprintf(stderr, "Sort-Reduce is done, but m_file_priority_queue has %lu elements\n", m_file_priority_queue.size() );
+			//fprintf(stderr, "Sort-Reduce is done, but m_file_priority_queue has %lu elements\n", m_file_priority_queue.size() );
+			status.done_file = NULL;
+		} else {
+			status.done_file = m_file_priority_queue.top();
 		}
-		status.done_file = m_file_priority_queue.top();
 	}
 	status.external_count = mv_stream_mergers_from_storage.size();
 	status.internal_count = mv_stream_mergers_from_mem.size();
@@ -343,7 +352,7 @@ SortReduce<K,V>::ManagerThread() {
 
 			//((m_done_inmem&&temp_file_count>1) || temp_file_count >= 16) 
 			//&& mv_stream_mergers_from_storage.size() < (size_t)m_maximum_threads 
-			&& cur_thread_count + 2 <= m_maximum_threads 
+			&& cur_thread_count + 4 <= m_maximum_threads 
 			&& mv_stream_mergers_from_storage.size() < 32 // FIXME(because of read buffer count)
 			) {
 			
@@ -358,26 +367,27 @@ SortReduce<K,V>::ManagerThread() {
 				to_sort = temp_file_count;
 			}
 
-			//SortReduceReducer::StreamMergeReducer<K,V>* merger;
 			SortReduceReducer::MergeReducer<K,V>* merger;
+			SortReduceReducer::MergeReducer_MultiTree<K,V>* mmerger = NULL;
 			if ( last_merge ) {
 				//merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory, m_config->output_filename);
 				
 				if ( m_config->output_filename == "" ) {
 					//FIXME...
-					SortReduceReducer::MergeReducer_MultiTree<K,V>* mmerger = new SortReduceReducer::MergeReducer_MultiTree<K,V>(m_config->update, "", m_maximum_threads);
-					mp_result_stream_reader = mmerger->GetResultReader();
+					//SortReduceReducer::MergeReducer_MultiTree<K,V>* 
+					mmerger = new SortReduceReducer::MergeReducer_MultiTree<K,V>(m_config->update, "", m_maximum_threads);
 					//mmerger->UserAccelerator(false);
 					merger = mmerger;
 				} else {
-					SortReduceReducer::MergeReducer_MultiTree<K,V>* mmerger = new SortReduceReducer::MergeReducer_MultiTree<K,V>(m_config->update, m_config->temporary_directory, m_maximum_threads, m_config->output_filename);
+					//SortReduceReducer::MergeReducer_MultiTree<K,V>* 
+					mmerger = new SortReduceReducer::MergeReducer_MultiTree<K,V>(m_config->update, m_config->temporary_directory, m_maximum_threads, m_config->output_filename);
 					//mmerger->UserAccelerator(false);
 					merger = mmerger;
-
 				}
-			} else if ( cur_thread_count + 2 <= m_maximum_threads ) {
+			} else { // if ( cur_thread_count + 4 <= m_maximum_threads ) {// this check done in parent if statement
 				//SortReduceReducer::MergeReducer_MultiTree<K,V>* mmerger = new SortReduceReducer::MergeReducer_MultiTree<K,V>(m_config->update, m_config->temporary_directory, m_maximum_threads-cur_thread_count, "");
-				SortReduceReducer::MergeReducer_MultiTree<K,V>* mmerger = new SortReduceReducer::MergeReducer_MultiTree<K,V>(m_config->update, m_config->temporary_directory, (m_maximum_threads-cur_thread_count)>4?4:(m_maximum_threads-cur_thread_count), "");
+				//SortReduceReducer::MergeReducer_MultiTree<K,V>* 
+				mmerger = new SortReduceReducer::MergeReducer_MultiTree<K,V>(m_config->update, m_config->temporary_directory, (m_maximum_threads-cur_thread_count)>4?4:(m_maximum_threads-cur_thread_count), "");
 				// FIXME This may be suboptimal if multiple manager threads are concurrent
 				//mmerger->UserAccelerator(false);
 				/*
@@ -390,30 +400,25 @@ SortReduce<K,V>::ManagerThread() {
 				}
 				*/
 				merger = mmerger;
-			} else {
-				// Invisible temporary file
-				merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory);
 			}
 			if ( !m_config->quiet ) printf( "Want to start storage-storage merge with %d inputs out of %ld %s\n", to_sort, temp_file_count, last_merge?"last":"not last" );
 
-			//size_t last_bytes = 0;
 			for ( int i = 0; i < to_sort; i++ ) {
 				SortReduceTypes::File* file = m_file_priority_queue.top();
 
 				m_file_priority_queue.pop();
 
-/*
-				if ( last_bytes > file->bytes ) {
-					printf( "File size order wrong!\n" );fflush(stdout);
-				} else {
-					last_bytes = file->bytes;
-				}
-*/
 
 				merger->PutFile(file);
 				//printf( "%d -- %x %x\n", i, *((uint32_t*)block.buffer),((uint32_t*)block.buffer)[1] );
 			}
 			merger->Start();
+
+
+			if ( last_merge && m_config->output_filename == "" ) {
+				mp_result_stream_reader = mmerger->GetResultReader();
+			}
+
 			//printf( "Storage->Storage Reducer\n" );fflush(stdout);
 			mv_stream_mergers_from_storage.push_back(merger);
 			cur_thread_count += merger->GetThreadCount();
@@ -423,7 +428,8 @@ SortReduce<K,V>::ManagerThread() {
 			SortReduceReducer::MergeReducer<K,V>* reducer = mv_stream_mergers_from_storage[i];
 			if ( reducer->IsDone() ) {
 				SortReduceTypes::File* reduced_file = reducer->GetOutFile();
-				m_file_priority_queue.push(reduced_file);
+
+
 				if ( !m_config->quiet ) printf( "Storage->Storage Pushed sort-reduced file ( size %lu ) -> %lu\n", reduced_file->bytes, m_file_priority_queue.size() );
 				total_bytes_file_from_storage += reduced_file->bytes;
 
@@ -432,11 +438,18 @@ SortReduce<K,V>::ManagerThread() {
 				cur_storage_total_bytes += reduced_file->bytes;
 				cur_storage_total_bytes -= reducer->GetInputFileBytes();
 				cur_thread_count -= reducer->GetThreadCount();
-				delete reducer;
+
 
 				if ( m_reduce_phase && mv_stream_mergers_from_storage.empty() ) {
 					m_reduce_phase = false;
 					if ( !m_config->quiet ) printf( "SortReduce exiting reduce phase %lu\n", max_storage_bytes - cur_storage_total_bytes );
+				}
+				
+				if ( reduced_file != NULL ) {
+					m_file_priority_queue.push(reduced_file);
+					delete reducer;
+				} else {
+					mq_delayed_dete_mergereducer.push(reducer);
 				}
 
 			} else {
@@ -451,26 +464,28 @@ SortReduce<K,V>::ManagerThread() {
 			int to_sort = (sorted_blocks_cnt > reducer_from_mem_fan_in_max)?reducer_from_mem_fan_in_max:sorted_blocks_cnt; //TODO
 
 			std::string filename = ""; // Temporary file
+			std::string dirname = m_config->temporary_directory;
 			// If single mem->storage file is all, then set name to output_filename
 			if ( m_done_input && m_file_priority_queue.empty() && mv_stream_mergers_from_mem.empty() && mp_block_sorter->BlocksInFlight() <= to_sort  ) {
-				filename = m_config->output_filename;
+				if ( m_config->output_filename == "" ) {
+					dirname = "";
+					m_done_inmem = true;
+				} else {
+					filename = m_config->output_filename;
+				}
 				if ( !m_config->quiet ) printf( "SortReduce writing inmem directly to file %s\n", filename.c_str() );
 			}
 			SortReduceReducer::MergeReducer<K,V>* merger = NULL;
-			merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory, filename);
-			/*
-			if ( to_sort == 1 ) {
-				//FIXME just write it to file!
-				merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory, filename);
-			} else {
-				SortReduceReducer::MergeReducer_MultiTree<K,V>* mmerger = new SortReduceReducer::MergeReducer_MultiTree<K,V>(m_config->update, m_config->temporary_directory, 4, filename); // Just so we can use acceleration
-				if ( mmerger->AcceleratorAvailable() && to_sort > HW_MAXIMUM_SOURCES ) {
-					to_sort = HW_MAXIMUM_SOURCES;
-				} 
-				merger = mmerger;
-			}
-			*/
+			//merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory, filename);
 
+			//FIXME We're wasting a reducer thread 
+			SortReduceReducer::MergeReducer_MultiTree<K,V>* mmerger = new SortReduceReducer::MergeReducer_MultiTree<K,V>(m_config->update, dirname, 2, filename); // Just so we can use acceleration
+			/*
+			if ( mmerger->AcceleratorAvailable() && to_sort > HW_MAXIMUM_SOURCES ) {
+				to_sort = HW_MAXIMUM_SOURCES;
+			} 
+			*/
+			merger = mmerger;
 
 			for ( int i = 0; i < to_sort; i++ ) {
 				SortReduceTypes::Block block = mp_block_sorter->GetOutBlock();
@@ -481,6 +496,8 @@ SortReduce<K,V>::ManagerThread() {
 			merger->Start();
 			total_blocks_sorted += to_sort;
 
+			if ( dirname == "" ) mp_result_stream_reader = mmerger->GetResultReader();
+
 			mv_stream_mergers_from_mem.push_back(merger);
 		}
 
@@ -488,8 +505,14 @@ SortReduce<K,V>::ManagerThread() {
 			SortReduceReducer::MergeReducer<K,V>* reducer = mv_stream_mergers_from_mem[i];
 			if ( reducer->IsDone() ) {
 				SortReduceTypes::File* reduced_file = reducer->GetOutFile();
-				m_file_priority_queue.push(reduced_file);
-				total_bytes_file_from_mem += reduced_file->bytes;
+				if ( reduced_file != NULL ) {
+					delete reducer;
+					m_file_priority_queue.push(reduced_file);
+				} else {
+					mq_delayed_dete_mergereducer.push(reducer);
+				}
+
+				if ( m_config->output_filename != "" ) total_bytes_file_from_mem += reduced_file->bytes;
 
 				//size_t fsize = lseek(reduced_file->fd, 0, SEEK_END);
 				//printf( "File size %lx %lx\n", fsize, reduced_file->bytes );
@@ -498,9 +521,10 @@ SortReduce<K,V>::ManagerThread() {
 				//fflush(stdout);
 
 				mv_stream_mergers_from_mem.erase(mv_stream_mergers_from_mem.begin() + i);
-				delete reducer;
 
-				cur_storage_total_bytes += reduced_file->bytes;
+				//FIXME this needs to be deleted at some point...
+
+				if (m_config->output_filename != "") cur_storage_total_bytes += reduced_file->bytes;
 			} else {
 				i++;
 			}
@@ -534,9 +558,9 @@ SortReduce<K,V>::ManagerThread() {
 
 			if ( mp_result_stream_reader == NULL ) {
 				mp_file_kv_reader = new SortReduceUtils::FileKvReader<K,V>(m_file_priority_queue.top(), m_config);
+				mp_output_file = m_file_priority_queue.top();
 			}
 
-			mp_output_file = m_file_priority_queue.top();
 			m_done_external = true;
 
 			if ( !m_config->quiet ) {

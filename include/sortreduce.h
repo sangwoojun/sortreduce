@@ -111,6 +111,7 @@ private:
 	SortReduceTypes::File* mp_output_file = NULL;
 public:
 	SortReduceTypes::File* GetOutFile() {return mp_output_file;};
+	std::queue<SortReduceReducer::MergeReducer<K,V>*> mq_delayed_dete_mergereducer;
 };
 
 #endif

@@ -86,11 +86,11 @@ int main(int argc, char** argv) {
 
 	int iteration = 0;
 	while ( true ) {
-		char filename[128];
-		sprintf(filename, "out%04d.sr", iteration);
+		//char filename[128];
+		//sprintf(filename, "out%04d.sr", iteration);
 
 		SortReduceTypes::Config<uint32_t,uint32_t>* conf =
-			new SortReduceTypes::Config<uint32_t,uint32_t>(tmp_dir, filename, max_sr_thread_count);
+			new SortReduceTypes::Config<uint32_t,uint32_t>(tmp_dir, "", max_sr_thread_count);
 		conf->quiet = true;
 		conf->SetUpdateFunction(&vertex_update);
 
@@ -202,7 +202,7 @@ int main(int argc, char** argv) {
 		int active_fd = vertex_values->OpenActiveFile(ri);
 		SortReduceUtils::FileKvReader<uint32_t,uint32_t>* active_reader = new SortReduceUtils::FileKvReader<uint32_t,uint32_t>(active_fd);
 		SortReduceTypes::Config<uint32_t,uint32_t>* active_conf =
-			new SortReduceTypes::Config<uint32_t,uint32_t>(tmp_dir, "sorted.sr", max_sr_thread_count);
+			new SortReduceTypes::Config<uint32_t,uint32_t>(tmp_dir, "", max_sr_thread_count);
 		active_conf->quiet = true;
 		active_conf->SetUpdateFunction(&vertex_update);
 		SortReduce<uint32_t,uint32_t>* active_sr = new SortReduce<uint32_t,uint32_t>(active_conf);
@@ -217,9 +217,7 @@ int main(int argc, char** argv) {
 		while ( active_sr->CheckStatus().done_external == false ) {
 			usleep(1000);
 		}
-		size_t result_bytes = active_sr->CheckStatus().done_file->bytes;
-		delete active_sr;
-		delete active_reader;
+		//size_t result_bytes = active_sr->CheckStatus().done_file->bytes;
 
 		now = std::chrono::high_resolution_clock::now();
 		duration_milli = std::chrono::duration_cast<std::chrono::milliseconds> (now-start);
@@ -234,11 +232,13 @@ int main(int argc, char** argv) {
 		//TODO give file size... sr results have padding "result_bytes"
 		BCMergeFlip<uint32_t,uint32_t>* mflip = NULL;
 		if ( ri == iteration-1 ) {
-			mflip = new BCMergeFlip<uint32_t,uint32_t>(tmp_dir, "", last_file_bytes, "sorted.sr", result_bytes);
-			printf ( "Reversing single file of size %lu\n", result_bytes );
+			mflip = new BCMergeFlip<uint32_t,uint32_t>(tmp_dir, "", 0, active_sr);
+			//mflip = new BCMergeFlip<uint32_t,uint32_t>(tmp_dir, "", last_file_bytes, "sorted.sr", result_bytes);
+			printf ( "Reversing single file\n" );
 		} else {
-			mflip = new BCMergeFlip<uint32_t,uint32_t>(tmp_dir, old_filename, last_file_bytes, "sorted.sr", result_bytes);
-			printf ( "Reversing two files of size %lu, %lu\n", last_file_bytes, result_bytes );
+			mflip = new BCMergeFlip<uint32_t,uint32_t>(tmp_dir, old_filename, last_file_bytes, active_sr);
+			//mflip = new BCMergeFlip<uint32_t,uint32_t>(tmp_dir, old_filename, last_file_bytes, "sorted.sr", result_bytes);
+			printf ( "Reversing two files of size %lu, ---\n", last_file_bytes );
 		}
 		SortReduceTypes::Config<uint32_t,uint32_t>* reverse_conf =
 			new SortReduceTypes::Config<uint32_t,uint32_t>(tmp_dir, dst_filename, max_sr_thread_count);
@@ -261,6 +261,10 @@ int main(int argc, char** argv) {
 		while ( reverse_sr->CheckStatus().done_external == false ) {
 			usleep(1000);
 		}
+		last_file_bytes = reverse_sr->CheckStatus().done_file->bytes;
+		
+		delete active_sr;
+		delete active_reader;
 
 		delete reverse_sr;
 		delete mflip;
@@ -269,7 +273,6 @@ int main(int argc, char** argv) {
 		duration_milli = std::chrono::duration_cast<std::chrono::milliseconds> (now-start);
 		printf( "Finished backtrace for iteration %d %lu ms\n", ri, duration_milli.count() );
 
-		last_file_bytes = result_bytes;
 	}
 
 	now = std::chrono::high_resolution_clock::now();
