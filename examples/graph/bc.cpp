@@ -56,18 +56,18 @@ int main(int argc, char** argv) {
 
 	int max_thread_count = 12;
 	int max_sr_thread_count = 8;
-	int max_vertexval_thread_count = 4;
+	int max_vertexval_thread_count = 1; // This is important, to maintain ordering in the active vertex list
 	int max_edgeproc_thread_count = 8;
 	if ( argc > 4 ) {
 		max_thread_count = atoi(argv[4]);
 	}
 	if ( max_thread_count >= 32 ) {
 		max_sr_thread_count = 28;
-		max_vertexval_thread_count = 8;
+		max_vertexval_thread_count = 1;
 		max_edgeproc_thread_count = 8;
 	} else if ( max_thread_count >= 24 ) {
 		max_sr_thread_count = 20;
-		max_vertexval_thread_count = 8;
+		max_vertexval_thread_count = 1;
 		max_edgeproc_thread_count = 8;
 	}
 		
@@ -181,11 +181,12 @@ int main(int argc, char** argv) {
 		printf( "\t\t++ Iteration done : %lu ms / %lu ms, Active %ld\n", duration_milli.count(), iteration_duration_milli.count(), active_cnt );
 		
 		iteration++;
+		
+		delete sr;
 
 		if ( active_cnt == 0 ) break;
 		vertex_values->NextIteration();
 
-		delete sr;
 	}
 	now = std::chrono::high_resolution_clock::now();
 	duration_milli = std::chrono::duration_cast<std::chrono::milliseconds> (now-start_all);
@@ -194,15 +195,16 @@ int main(int argc, char** argv) {
 
 	size_t last_file_bytes = 0;
 	for ( int ri = iteration-2; ri >= 0; ri-- ) { // iteration-1 has nothing because it has no active vertices
-
-
 		std::chrono::high_resolution_clock::time_point start;
-		start = std::chrono::high_resolution_clock::now();
+
+
 
 		int active_fd = vertex_values->OpenActiveFile(ri);
+		/*
 		SortReduceUtils::FileKvReader<uint32_t,uint32_t>* active_reader = new SortReduceUtils::FileKvReader<uint32_t,uint32_t>(active_fd);
+		start = std::chrono::high_resolution_clock::now();
 		SortReduceTypes::Config<uint32_t,uint32_t>* active_conf =
-			new SortReduceTypes::Config<uint32_t,uint32_t>(tmp_dir, "", max_sr_thread_count);
+			new SortReduceTypes::Config<uint32_t,uint32_t>(tmp_dir, "sorted.sr", max_sr_thread_count);
 		active_conf->quiet = true;
 		active_conf->SetUpdateFunction(&vertex_update);
 		SortReduce<uint32_t,uint32_t>* active_sr = new SortReduce<uint32_t,uint32_t>(active_conf);
@@ -222,6 +224,9 @@ int main(int argc, char** argv) {
 		now = std::chrono::high_resolution_clock::now();
 		duration_milli = std::chrono::duration_cast<std::chrono::milliseconds> (now-start);
 		printf( "Sorted active list for iteration %d %lu ms\n", ri, duration_milli.count() );
+		*/
+
+		printf( "Starting ri = %d/%d\n", ri, iteration );
 
 		start = std::chrono::high_resolution_clock::now();
 
@@ -231,14 +236,16 @@ int main(int argc, char** argv) {
 
 		//TODO give file size... sr results have padding "result_bytes"
 		BCMergeFlip<uint32_t,uint32_t>* mflip = NULL;
-		if ( ri == iteration-1 ) {
-			mflip = new BCMergeFlip<uint32_t,uint32_t>(tmp_dir, "", 0, active_sr);
-			//mflip = new BCMergeFlip<uint32_t,uint32_t>(tmp_dir, "", last_file_bytes, "sorted.sr", result_bytes);
+		if ( ri == iteration-2 ) {
 			printf ( "Reversing single file\n" );
+			fflush(stdout);
+			mflip = new BCMergeFlip<uint32_t,uint32_t>(tmp_dir, "", 0, active_fd);
+			//mflip = new BCMergeFlip<uint32_t,uint32_t>(tmp_dir, "", last_file_bytes, "sorted.sr", result_bytes);
 		} else {
-			mflip = new BCMergeFlip<uint32_t,uint32_t>(tmp_dir, old_filename, last_file_bytes, active_sr);
-			//mflip = new BCMergeFlip<uint32_t,uint32_t>(tmp_dir, old_filename, last_file_bytes, "sorted.sr", result_bytes);
 			printf ( "Reversing two files of size %lu, ---\n", last_file_bytes );
+			fflush(stdout);
+			mflip = new BCMergeFlip<uint32_t,uint32_t>(tmp_dir, old_filename, last_file_bytes, active_fd);
+			//mflip = new BCMergeFlip<uint32_t,uint32_t>(tmp_dir, old_filename, last_file_bytes, "sorted.sr", result_bytes);
 		}
 		SortReduceTypes::Config<uint32_t,uint32_t>* reverse_conf =
 			new SortReduceTypes::Config<uint32_t,uint32_t>(tmp_dir, dst_filename, max_sr_thread_count);
@@ -246,25 +253,48 @@ int main(int argc, char** argv) {
 		reverse_conf->SetUpdateFunction(&vertex_update_add);
 		SortReduce<uint32_t,uint32_t>* reverse_sr = new SortReduce<uint32_t,uint32_t>(reverse_conf);
 
+/*
+		uint32_t last_key = 0;
+		uint32_t cur_sum = 0;
+	*/
 		size_t rev_count = 0;
 		std::tuple<uint32_t,uint32_t,bool> rr = mflip->Next();
 		while ( std::get<2>(rr) ) {
 			uint32_t key = std::get<0>(rr);
 			uint32_t val = std::get<1>(rr);
 
-			reverse_sr->Update(key,val);
-			rr = mflip->Next();
+/*
+			if ( key == last_key ) {
+				cur_sum += val;
+			} else {
+
+				if ( cur_sum > 0 ) reverse_sr->Update(last_key,cur_sum);
+				last_key = key;
+				cur_sum = val;
+				rr = mflip->Next();
+				rev_count++;
+			}
+			*/
+				reverse_sr->Update(key,val);
+				rr = mflip->Next();
+				rev_count++;
+		}
+		/*
+		if ( cur_sum > 0 ) {
+			reverse_sr->Update(last_key,cur_sum);
 			rev_count++;
 		}
-		//printf( "reverse_sr given %lu kvps\n", rev_count );
+		*/
+
+		printf( "reverse_sr given %lu kvps\n", rev_count );
 		reverse_sr->Finish();
 		while ( reverse_sr->CheckStatus().done_external == false ) {
 			usleep(1000);
 		}
 		last_file_bytes = reverse_sr->CheckStatus().done_file->bytes;
 		
-		delete active_sr;
-		delete active_reader;
+		//delete active_sr;
+		//delete active_reader;
 
 		delete reverse_sr;
 		delete mflip;
@@ -278,7 +308,7 @@ int main(int argc, char** argv) {
 	now = std::chrono::high_resolution_clock::now();
 	duration_milli = std::chrono::duration_cast<std::chrono::milliseconds> (now-start_all);
 	printf( "\t\t++ BC All Done! %lu ms\n", duration_milli.count() );
-	printf( "BC results are stored in file reverse0000.sr\n" );
+	printf( "BC results are stored in file reverse0000.sr, up to %lu bytes\n", last_file_bytes );
 
 	exit(0);
 }

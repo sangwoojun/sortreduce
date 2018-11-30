@@ -65,6 +65,17 @@ SortReduce<K,V>::~SortReduce() {
 
 		delete reducer;
 	}
+		
+		/*
+	for ( int i = 0; (size_t)i < mv_stream_mergers_from_storage.size(); ) {
+		SortReduceReducer::MergeReducer<K,V>* reducer = mv_stream_mergers_from_storage[i];
+		delete reducer;
+	}
+	for ( int i = 0; (size_t)i < mv_stream_mergers_from_mem.size(); ) {
+		SortReduceReducer::MergeReducer<K,V>* reducer = mv_stream_mergers_from_mem[i];
+		delete reducer;
+	}
+	*/
 
 }
 
@@ -378,6 +389,10 @@ SortReduce<K,V>::ManagerThread() {
 					mmerger = new SortReduceReducer::MergeReducer_MultiTree<K,V>(m_config->update, "", m_maximum_threads);
 					//mmerger->UserAccelerator(false);
 					merger = mmerger;
+
+					mq_delayed_dete_mergereducer.push(merger);
+					//printf( "\t\tStorage->Storage delayed deleting reducer\n" );
+					//fflush(stdout);
 				} else {
 					//SortReduceReducer::MergeReducer_MultiTree<K,V>* 
 					mmerger = new SortReduceReducer::MergeReducer_MultiTree<K,V>(m_config->update, m_config->temporary_directory, m_maximum_threads, m_config->output_filename);
@@ -430,12 +445,8 @@ SortReduce<K,V>::ManagerThread() {
 				SortReduceTypes::File* reduced_file = reducer->GetOutFile();
 
 
-				if ( !m_config->quiet ) printf( "Storage->Storage Pushed sort-reduced file ( size %lu ) -> %lu\n", reduced_file->bytes, m_file_priority_queue.size() );
-				total_bytes_file_from_storage += reduced_file->bytes;
-
 				mv_stream_mergers_from_storage.erase(mv_stream_mergers_from_storage.begin() + i);
 
-				cur_storage_total_bytes += reduced_file->bytes;
 				cur_storage_total_bytes -= reducer->GetInputFileBytes();
 				cur_thread_count -= reducer->GetThreadCount();
 
@@ -446,10 +457,13 @@ SortReduce<K,V>::ManagerThread() {
 				}
 				
 				if ( reduced_file != NULL ) {
+					if ( !m_config->quiet ) printf( "Storage->Storage Pushed sort-reduced file ( size %lu ) -> %lu\n", reduced_file->bytes, m_file_priority_queue.size() );
+					total_bytes_file_from_storage += reduced_file->bytes;
+					cur_storage_total_bytes += reduced_file->bytes;
+
 					m_file_priority_queue.push(reduced_file);
 					delete reducer;
 				} else {
-					mq_delayed_dete_mergereducer.push(reducer);
 				}
 
 			} else {
@@ -470,10 +484,14 @@ SortReduce<K,V>::ManagerThread() {
 				if ( m_config->output_filename == "" ) {
 					dirname = "";
 					m_done_inmem = true;
+					while ( mp_block_sorter->GetThreadCount() > 0 ) {
+						mp_block_sorter->KillThread();
+					}
 				} else {
 					filename = m_config->output_filename;
 				}
-				if ( !m_config->quiet ) printf( "SortReduce writing inmem directly to file %s\n", filename.c_str() );
+				//if ( !m_config->quiet ) 
+				printf( "SortReduce writing inmem directly to file %s/%s\n",dirname.c_str(), filename.c_str() );
 			}
 			SortReduceReducer::MergeReducer<K,V>* merger = NULL;
 			//merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory, filename);
@@ -486,6 +504,11 @@ SortReduce<K,V>::ManagerThread() {
 			} 
 			*/
 			merger = mmerger;
+			if ( dirname == "" ) {
+				mq_delayed_dete_mergereducer.push(merger);
+				//printf( "\t\tMem->Storage delayed deleting reducer\n" );
+				//fflush(stdout);
+			}
 
 			for ( int i = 0; i < to_sort; i++ ) {
 				SortReduceTypes::Block block = mp_block_sorter->GetOutBlock();
@@ -505,26 +528,24 @@ SortReduce<K,V>::ManagerThread() {
 			SortReduceReducer::MergeReducer<K,V>* reducer = mv_stream_mergers_from_mem[i];
 			if ( reducer->IsDone() ) {
 				SortReduceTypes::File* reduced_file = reducer->GetOutFile();
+				//if ( m_config->output_filename != "" ) {
 				if ( reduced_file != NULL ) {
 					delete reducer;
 					m_file_priority_queue.push(reduced_file);
+					total_bytes_file_from_mem += reduced_file->bytes;
+					cur_storage_total_bytes += reduced_file->bytes;
+
+					if ( !m_config->quiet ) printf( "Pushed sort-reduced file ( size %lu ) -> %lu\n", reduced_file->bytes, m_file_priority_queue.size() );
 				} else {
-					mq_delayed_dete_mergereducer.push(reducer);
 				}
 
-				if ( m_config->output_filename != "" ) total_bytes_file_from_mem += reduced_file->bytes;
 
 				//size_t fsize = lseek(reduced_file->fd, 0, SEEK_END);
 				//printf( "File size %lx %lx\n", fsize, reduced_file->bytes );
-				if ( !m_config->quiet ) printf( "Pushed sort-reduced file ( size %lu ) -> %lu\n", reduced_file->bytes, m_file_priority_queue.size() );
 				//printf( "from_mem erased %d\n", mv_stream_mergers_from_mem.size() );
 				//fflush(stdout);
 
 				mv_stream_mergers_from_mem.erase(mv_stream_mergers_from_mem.begin() + i);
-
-				//FIXME this needs to be deleted at some point...
-
-				if (m_config->output_filename != "") cur_storage_total_bytes += reduced_file->bytes;
 			} else {
 				i++;
 			}

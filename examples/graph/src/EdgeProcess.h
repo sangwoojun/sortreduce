@@ -19,7 +19,6 @@
 #include "types.h"
 #include "utils.h"
 #include "sortreduce.h"
-#include "FileReaderAio.h"
 
 #define MAX_EDGEPROC_REQS 16
 #define MAX_EDGEPROC_THREADS 8

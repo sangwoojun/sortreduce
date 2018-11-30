@@ -49,13 +49,9 @@ BlockSorter<K,V>::BlockSorter(SortReduceTypes::Config<K,V>* config, SortReduceUt
 
 template <class K, class V>
 BlockSorter<K,V>::~BlockSorter() {
-/*
-	for ( int i = 0; i < m_buffer_count; i++ ) {
-		if ( mpp_managed_buffers[i] != NULL ) free(mpp_managed_buffers[i]);
+	while ( this->GetThreadCount() > 0 ) {
+		this->KillThread();
 	}
-	free (mpp_managed_buffers);
-*/
-
 }
 
 template <class K, class V>

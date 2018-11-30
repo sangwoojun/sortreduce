@@ -18,6 +18,8 @@ namespace SortReduceUtils {
 		FileKvReader(int fd, size_t bytes = 0);
 		~FileKvReader();
 
+		size_t GetFileBytes() { return m_file_size; };
+
 		void Rewind();
 		void Seek(size_t idx);
 		std::tuple<K,V, bool> Next(bool advance = true);

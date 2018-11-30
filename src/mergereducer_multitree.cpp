@@ -20,6 +20,7 @@ SortReduceReducer::MergeReducer_MultiTree<K,V>::MergeReducer_MultiTree(V (*updat
 	this->mvv_tree_nodes.push_back(std::vector<BlockSource<K,V>*>());
 
 	this->mp_reducer_node_to_file = NULL;
+	this->mp_merger_accel = NULL;
 	this->mp_reducer_node_stream = NULL;
 	this->mp_block_source_reader = NULL;
 
@@ -192,7 +193,7 @@ SortReduceReducer::MergeReducer_MultiTree<K,V>::Start() {
 	BlockSource<K,V>* root = mvv_tree_nodes[cur_level][0];
 	if ( m_temp_directory == "" ) {
 		if ( !accelerate ) {
-			mp_reducer_node_stream = new ReducerNodeStream<K,V>(mp_update, 1024*1024*4, 32);
+			mp_reducer_node_stream = new ReducerNodeStream<K,V>(mp_update, 1024*1024*4, 16);
 			mp_reducer_node_stream->SetSource(root);
 			root = mp_reducer_node_stream;
 			m_thread_count ++;
