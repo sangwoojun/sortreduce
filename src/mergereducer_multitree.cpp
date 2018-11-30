@@ -192,7 +192,7 @@ SortReduceReducer::MergeReducer_MultiTree<K,V>::Start() {
 	BlockSource<K,V>* root = mvv_tree_nodes[cur_level][0];
 	if ( m_temp_directory == "" ) {
 		if ( !accelerate ) {
-			mp_reducer_node_stream = new ReducerNodeStream<K,V>(mp_update, 1024*1024*4, 4);
+			mp_reducer_node_stream = new ReducerNodeStream<K,V>(mp_update, 1024*1024*4, 32);
 			mp_reducer_node_stream->SetSource(root);
 			root = mp_reducer_node_stream;
 			m_thread_count ++;
