@@ -14,7 +14,7 @@ all: $(OBJ)
 
 
 $(OUTPUTDIR)/%: %.cpp $(SORTREDUCE_LIB)/libsortreduce.a $(GRAPH_CPP) | $(OUTPUTDIR)
-	g++ -o $(OUTPUTDIR)/$(basename $<) $< $(GRAPH_CPP) $(SRFLAGS) -Wall -I$(SORTREDUCE_INCLUDE) -I$(GRAPH_SRC) -L$(SORTREDUCE_LIB) -std=c++11 -pedantic -lsortreduce -pthread -laio -march=native -lrt -g
+	g++ -o $(OUTPUTDIR)/$(basename $<) $< $(GRAPH_CPP) $(SRFLAGS) -Wall -I$(SORTREDUCE_INCLUDE) -I$(GRAPH_SRC) -L$(SORTREDUCE_LIB) -std=c++11 -pedantic -lsortreduce -pthread -laio -march=native -lrt -O2 -g
 
 $(OUTPUTDIR):
 	mkdir -p obj
