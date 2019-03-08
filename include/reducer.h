@@ -269,7 +269,7 @@ namespace SortReduceReducer {
 		virtual void Start() = 0;
 		virtual bool IsDone() = 0;
 		virtual SortReduceTypes::File* GetOutFile() = 0;
-		virtual int GetThreadCount() { return 1; };
+		virtual int GetThreadCount() = 0;
 
 		virtual size_t GetInputFileBytes() = 0;
 	protected:
@@ -285,6 +285,7 @@ namespace SortReduceReducer {
 		void PutFile(SortReduceTypes::File* file);
 		virtual void Start() = 0;
 		bool IsDone() { return m_done; };
+		int GetThreadCount() { return 1; };
 		SortReduceTypes::File* GetOutFile() {return this->m_out_file; };
 
 		size_t GetInputFileBytes() { return this->m_input_file_bytes; };
