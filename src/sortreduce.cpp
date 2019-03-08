@@ -402,7 +402,8 @@ SortReduce<K,V>::ManagerThread() {
 			} else { // if ( cur_thread_count + 4 <= m_maximum_threads ) {// this check done in parent if statement
 				//SortReduceReducer::MergeReducer_MultiTree<K,V>* mmerger = new SortReduceReducer::MergeReducer_MultiTree<K,V>(m_config->update, m_config->temporary_directory, m_maximum_threads-cur_thread_count, "");
 				//SortReduceReducer::MergeReducer_MultiTree<K,V>* 
-				mmerger = new SortReduceReducer::MergeReducer_MultiTree<K,V>(m_config->update, m_config->temporary_directory, (m_maximum_threads-cur_thread_count)>4?4:(m_maximum_threads-cur_thread_count), "");
+				merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory, m_config->output_filename);
+				//mmerger = new SortReduceReducer::MergeReducer_MultiTree<K,V>(m_config->update, m_config->temporary_directory, (m_maximum_threads-cur_thread_count)>4?4:(m_maximum_threads-cur_thread_count), "");
 				// FIXME This may be suboptimal if multiple manager threads are concurrent
 				//mmerger->UserAccelerator(false);
 				/*
@@ -414,7 +415,7 @@ SortReduce<K,V>::ManagerThread() {
 					to_sort = min_files_per_single_merger;
 				}
 				*/
-				merger = mmerger;
+				//merger = mmerger;
 			}
 			if ( !m_config->quiet ) printf( "Want to start storage-storage merge with %d inputs out of %ld %s\n", to_sort, temp_file_count, last_merge?"last":"not last" );
 
