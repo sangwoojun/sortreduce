@@ -402,7 +402,7 @@ SortReduce<K,V>::ManagerThread() {
 			} else { // if ( cur_thread_count + 4 <= m_maximum_threads ) {// this check done in parent if statement
 				//SortReduceReducer::MergeReducer_MultiTree<K,V>* mmerger = new SortReduceReducer::MergeReducer_MultiTree<K,V>(m_config->update, m_config->temporary_directory, m_maximum_threads-cur_thread_count, "");
 				//SortReduceReducer::MergeReducer_MultiTree<K,V>* 
-				merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory, m_config->output_filename);
+				merger = new SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>(m_config->update, m_config->temporary_directory, "");
 				//mmerger = new SortReduceReducer::MergeReducer_MultiTree<K,V>(m_config->update, m_config->temporary_directory, (m_maximum_threads-cur_thread_count)>4?4:(m_maximum_threads-cur_thread_count), "");
 				// FIXME This may be suboptimal if multiple manager threads are concurrent
 				//mmerger->UserAccelerator(false);
