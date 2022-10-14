@@ -7,7 +7,8 @@
 #include <queue>
 #include <string>
 #include <thread>
-
+#include <iostream>
+#include <bitset>
 #ifdef KVTYPES1
 #define TEMPLATE_EXPLICIT_INSTANTIATION1(X) template class X<KVTYPES1>;
 #else 
@@ -132,6 +133,64 @@ namespace SortReduceTypes {
 		int file_count;
 		File* done_file;
 	private:
+	};
+
+	class uint128_t
+	{
+	private:
+		std::bitset<128> data;
+	public:
+		uint128_t(){data = 0;}
+		uint128_t(uint64_t d) { data = d;}
+		uint128_t(std::string str) { data = std::bitset<128>(str);}
+		uint128_t(std::bitset<128> d) { data = d;}
+		friend std::ostream& operator << (std::ostream &out, const uint128_t &d) { out << d.data; return out; }
+
+		friend bool operator < (const uint128_t &d1, const uint128_t &d2) {
+			return d1.data.to_string() < d2.data.to_string();
+		}
+
+		friend bool operator > (const uint128_t &d1, const uint128_t &d2) {
+			return d1.data.to_string() > d2.data.to_string();
+		}
+
+		friend bool operator == (const uint128_t &d1, const uint128_t &d2) {
+			return d1.data == d2.data;
+		}
+
+		uint128_t operator = (uint128_t other){
+			this->data = other.data;
+			return *this;
+		}
+	};
+
+	class Count {
+	private:
+		uint32_t d[4] = {0};
+	public:
+		Count(){}
+		Count(uint32_t d1, uint32_t d2, uint32_t d3, uint32_t d4){
+			d[0] = d1; d[1]  = d2; d[2] = d3; d[3] = d4;
+		}
+		Count(int l){ d[l] = 1; }
+
+		Count operator = (Count other)
+		{
+			this->d[0] = other.d[0];
+			this->d[1] = other.d[1];
+			this->d[2] = other.d[2];
+			this->d[3] = other.d[3];
+			return *this;
+		}
+		friend std::ostream& operator << (std::ostream &out, const Count &data)
+		{
+			out << data.d[0] << " " <<  data.d[1] << " " << data.d[2] << " " << data.d[3];
+			return out;
+		}
+		friend Count operator + (Count a, Count b)
+		{
+			return Count(a.d[0] + b.d[0], a.d[1] + b.d[1], a.d[2] + b.d[2], a.d[3] + b.d[3]);
+		}
 	};
 }
 
