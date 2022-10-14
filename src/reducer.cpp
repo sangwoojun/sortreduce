@@ -1273,7 +1273,7 @@ SortReduceReducer::ReducerNode<K,V>::WorkerThread() {
 				cnt++;
 				if ( !ignore_rest ) {
 					if ( last_kvp.key > kvp.key ) {
-						printf("WARNING: ReducerNode ignoring wrong order key %lx %lx -- %lx\n", rcnt, (uint64_t)last_kvp.key, (uint64_t)kvp.key ); fflush(stdout);
+						std:: cout << "WARNING: ReducerNode ignoring wrong order key! " << rcnt << " " << last_kvp.key << " -- " << kvp.key << std::endl;
 						ignore_rest = true;
 					//} else {
 						//printf("Correct order! %lx %lx -- %lx\n", rcnt, (uint64_t)last_kvp.key, (uint64_t)kvp.key ); fflush(stdout);
@@ -1361,7 +1361,7 @@ SortReduceReducer::ReducerNodeStream<K,V>::WorkerThread() {
 				cnt++;
 				if ( !ignore_rest ) {
 					if ( last_kvp.key > kvp.key ) {
-						printf("WARNING: ReducerNode ignoring wrong order key! %lx %lx -- %lx\n", rcnt, (uint64_t)last_kvp.key, (uint64_t)kvp.key ); fflush(stdout);
+						std:: cout << "WARNING: ReducerNode ignoring wrong order key! " << rcnt << " " << last_kvp.key << " -- " << kvp.key << std::endl;
 						ignore_rest = true;
 					} else {
 						last_kvp = kvp;
@@ -1466,7 +1466,7 @@ SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::WorkerThread() {
 	const int source_count = this->mv_input_sources.size();
 	
 	std::vector<size_t> read_offset(source_count, 0);
-	std::vector<uint64_t> last_key_src(source_count, 0);
+	std::vector<K> last_key_src(source_count, 0);
 
 	std::chrono::high_resolution_clock::time_point last_time;
 	std::chrono::milliseconds duration_milli;
@@ -1603,7 +1603,7 @@ SortReduceReducer::StreamMergeReducer_SinglePriority<K,V>::WorkerThread() {
 					m_priority_queue.push(kvp);
 
 					if ( last_key_src[src] > key ) {
-						printf( "Source key order wrong %lx %lx @ %d\n", (uint64_t)last_key_src[src], (uint64_t)key, src );
+						std:: cout << "Source key order wrong" << last_key_src[src] << ", " << key << " @ " << src << std::endl;
 					}
 					last_key_src[src] = key;
 
